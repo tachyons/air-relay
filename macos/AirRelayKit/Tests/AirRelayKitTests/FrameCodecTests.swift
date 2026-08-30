@@ -24,6 +24,19 @@ final class FrameCodecTests: XCTestCase {
         XCTAssertNil(try FrameCodec.decode(from: &buffer))
     }
 
+    func testCallStateDecodesSharedVectorWithPhoto() throws {
+        let json = #"{"callId":"uuid","state":"ringing","displayName":"Alice","number":"+1555","photoPng":"aWNvbg=="}"#
+        let call = try JSONDecoder().decode(CallState.self, from: Data(json.utf8))
+        XCTAssertEqual(call.photoPng, "aWNvbg==")
+        XCTAssertEqual(call.displayName, "Alice")
+    }
+
+    func testCallStateDecodesWithoutPhotoForBackwardCompatibility() throws {
+        let json = #"{"callId":"uuid","state":"active"}"#
+        let call = try JSONDecoder().decode(CallState.self, from: Data(json.utf8))
+        XCTAssertNil(call.photoPng)
+    }
+
     func testRejectsUnknownType() {
         var buffer = Data([0, 0, 0, 1, 0xFF])
         XCTAssertThrowsError(try FrameCodec.decode(from: &buffer))
