@@ -42,6 +42,21 @@ class FrameCodecTest {
     }
 
     @Test
+    fun `call state decodes shared vector with photo`() {
+        val json = """{"callId":"uuid","state":"ringing","displayName":"Alice","number":"+1555","photoPng":"aWNvbg=="}"""
+        val call = ProtocolJson.decodeFromString<CallState>(json)
+        assertEquals("aWNvbg==", call.photoPng)
+        assertEquals("Alice", call.displayName)
+    }
+
+    @Test
+    fun `call state decodes without photo for backward compatibility`() {
+        val json = """{"callId":"uuid","state":"active"}"""
+        val call = ProtocolJson.decodeFromString<CallState>(json)
+        assertEquals(null, call.photoPng)
+    }
+
+    @Test
     fun `rejects unknown type`() {
         val bytes = byteArrayOf(0, 0, 0, 1, 0xFF.toByte())
         assertThrows(IOException::class.java) {

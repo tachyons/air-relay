@@ -71,6 +71,7 @@ public struct CallState: Codable, Sendable {
     public var state: String
     public var displayName: String?
     public var number: String?
+    public var photoPng: String?
 }
 
 public struct CallAction: Codable, Sendable {

@@ -122,11 +122,13 @@ class CallMonitor(private val context: Context) {
             currentNumber = null
         }
 
+        val contact = callerNumber?.let { lookupContact(it) }
         val payload = CallState(
             callId = callId,
             state = stateName,
-            displayName = callerNumber?.let { lookupContactName(it) },
+            displayName = contact?.name,
             number = callerNumber,
+            photoPng = contact?.photoPng,
         )
         Log.i(TAG, "Call state: $stateName number=${callerNumber != null}")
         SyncService.instance?.send(
@@ -135,24 +137,48 @@ class CallMonitor(private val context: Context) {
         )
     }
 
-    private fun lookupContactName(number: String): String? {
-        if (!granted(Manifest.permission.READ_CONTACTS)) return null
+    private data class Contact(val name: String?, val photoPng: String?)
+
+    /** Cached per number so repeated state changes don't re-query or re-encode. */
+    private val contactCache = HashMap<String, Contact?>()
+
+    private fun lookupContact(number: String): Contact? = contactCache.getOrPut(number) {
+        if (!granted(Manifest.permission.READ_CONTACTS)) return@getOrPut null
         val uri = Uri.withAppendedPath(
             ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
             Uri.encode(number),
         )
-        return runCatching {
+        runCatching {
             context.contentResolver.query(
                 uri,
-                arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME),
+                arrayOf(
+                    ContactsContract.PhoneLookup.DISPLAY_NAME,
+                    ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI,
+                ),
                 null,
                 null,
                 null,
             )?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
+                if (!cursor.moveToFirst()) return@use null
+                Contact(
+                    name = cursor.getString(0),
+                    photoPng = cursor.getString(1)?.let { encodePhoto(Uri.parse(it)) },
+                )
             }
         }.getOrNull()
     }
+
+    /** Reads a contact photo thumbnail and re-encodes it as base64 PNG (same
+     *  pattern as notification app icons). Thumbnails are already small. */
+    private fun encodePhoto(photoUri: Uri): String? = runCatching {
+        context.contentResolver.openInputStream(photoUri)?.use { stream ->
+            val bitmap = android.graphics.BitmapFactory.decodeStream(stream) ?: return@use null
+            val out = java.io.ByteArrayOutputStream()
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+            bitmap.recycle()
+            android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+        }
+    }.getOrNull()
 
     @Suppress("DEPRECATION")
     fun execute(action: CallAction) {
