@@ -20,6 +20,8 @@ public enum FrameType: UInt8, Sendable {
     case videoConfig = 0x52
     case videoFrame = 0x53
     case deviceStatus = 0x60
+    case mediaState = 0x80
+    case mediaAction = 0x81
 }
 
 public struct Frame: Sendable, Equatable {

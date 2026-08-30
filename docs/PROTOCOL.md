@@ -55,6 +55,8 @@ All messages after the TLS handshake use length-prefixed frames:
 | 0x52 | VIDEO_CONFIG    | binary  | android → mac (SPS/PPS) |
 | 0x53 | VIDEO_FRAME     | binary  | android → mac |
 | 0x60 | DEVICE_STATUS   | JSON    | android → mac |
+| 0x80 | MEDIA_STATE     | JSON    | android → mac |
+| 0x81 | MEDIA_ACTION    | JSON    | mac → android |
 
 ## JSON payload schemas
 
@@ -125,6 +127,30 @@ Binary: `pts_us (u64 BE) || flags (u8, bit0 = keyframe) || Annex-B NAL units`.
 ```json
 { "battery": 87, "charging": false, "wifiSsid": "Home" }
 ```
+
+### MEDIA_STATE
+```json
+{
+  "packageName": "com.spotify.music",
+  "appName": "Spotify",
+  "title": "Song",
+  "artist": "Artist",
+  "playing": true,
+  "artPng": "<base64, optional>"
+}
+```
+
+Sent when the phone's active media session changes (new track, play/pause,
+session ended). A state with `"title": null` means nothing is playing and
+the Mac hides its now-playing row. `artPng` is album art scaled to ≤128 px,
+sent only when the track changes (the phone caches the last encoded art).
+
+### MEDIA_ACTION
+```json
+{ "action": "play|pause|next|previous" }
+```
+
+Applied to the phone's most recent active media session.
 
 ## Keepalive & reconnection
 

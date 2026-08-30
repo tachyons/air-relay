@@ -23,6 +23,14 @@ struct MenuBarView: View {
                     .padding(12)
                 Divider()
             }
+            if let media = engine.mediaState {
+                NowPlayingRow(media: media) { action in
+                    engine.sendMediaAction(action)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                Divider()
+            }
             if !engine.fileTransfer.transfers.isEmpty {
                 transferList
                     .padding(12)
@@ -300,6 +308,69 @@ struct MenuBarView: View {
 #Preview("Menu bar") {
     MenuBarView()
         .environmentObject(SyncEngine())
+}
+
+private struct NowPlayingRow: View {
+    let media: MediaState
+    let onAction: (String) -> Void
+
+    private var albumArt: NSImage? {
+        guard let base64 = media.artPng,
+              let data = Data(base64Encoded: base64)
+        else { return nil }
+        return NSImage(data: data)
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let art = albumArt {
+                Image(nsImage: art)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 36, height: 36)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            } else {
+                Image(systemName: "music.note")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.primary.opacity(0.06))
+                    )
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(media.title ?? "")
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+                Text(media.artist ?? media.appName ?? "")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            HStack(spacing: 2) {
+                Button { onAction("previous") } label: {
+                    Image(systemName: "backward.fill")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                Button { onAction(media.playing ? "pause" : "play") } label: {
+                    Image(systemName: media.playing ? "pause.fill" : "play.fill")
+                        .font(.body)
+                        .frame(width: 22)
+                }
+                .buttonStyle(.plain)
+                Button { onAction("next") } label: {
+                    Image(systemName: "forward.fill")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
 }
 
 private struct NotificationRow: View {

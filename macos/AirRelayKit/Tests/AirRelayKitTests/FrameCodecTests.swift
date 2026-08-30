@@ -24,6 +24,31 @@ final class FrameCodecTests: XCTestCase {
         XCTAssertNil(try FrameCodec.decode(from: &buffer))
     }
 
+    func testMediaFramesWireFormatMatchesSpec() {
+        XCTAssertEqual(FrameCodec.encode(Frame(type: .mediaState))[4], 0x80)
+        XCTAssertEqual(FrameCodec.encode(Frame(type: .mediaAction))[4], 0x81)
+    }
+
+    func testMediaStateDecodesSharedVector() throws {
+        let json = #"{"packageName":"com.spotify.music","appName":"Spotify","title":"Song","artist":"Artist","playing":true,"artPng":"YXJ0"}"#
+        let state = try JSONDecoder().decode(MediaState.self, from: Data(json.utf8))
+        XCTAssertEqual(state.title, "Song")
+        XCTAssertTrue(state.playing)
+        XCTAssertEqual(state.artPng, "YXJ0")
+    }
+
+    func testMediaStateDecodesEmptySessionVector() throws {
+        let state = try JSONDecoder().decode(MediaState.self, from: Data(#"{"playing":false}"#.utf8))
+        XCTAssertNil(state.title)
+        XCTAssertFalse(state.playing)
+    }
+
+    func testMediaActionEncodesSharedVector() throws {
+        let data = try JSONEncoder().encode(MediaAction(action: "next"))
+        let decoded = try JSONDecoder().decode(MediaAction.self, from: data)
+        XCTAssertEqual(decoded.action, "next")
+    }
+
     func testRejectsUnknownType() {
         var buffer = Data([0, 0, 0, 1, 0xFF])
         XCTAssertThrowsError(try FrameCodec.decode(from: &buffer))
