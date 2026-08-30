@@ -28,6 +28,7 @@ public final class SyncEngine: ObservableObject {
     @Published public private(set) var localFingerprint: String = ""
     @Published public private(set) var lastError: String?
     @Published public private(set) var pendingPairing: PendingPairing?
+    @Published public private(set) var isFindingPhone = false
 
     private var listener: SyncListener?
     private var connection: SyncConnection?
@@ -259,6 +260,18 @@ public final class SyncEngine: ObservableObject {
         decoder.invalidate()
     }
 
+    public func findPhone() {
+        guard !quarantined else { return }
+        connection?.send(Frame(type: .findPhone))
+        isFindingPhone = true
+    }
+
+    public func stopFindingPhone() {
+        guard !quarantined else { return }
+        connection?.send(Frame(type: .findPhoneStop))
+        isFindingPhone = false
+    }
+
     private func attach(_ connection: SyncConnection, peerFingerprint: String) {
         let previous = self.connection
         self.connection = connection
@@ -276,6 +289,7 @@ public final class SyncEngine: ObservableObject {
                 self.isConnected = false
                 self.peerName = nil
                 self.pendingPairing = nil
+                self.isFindingPhone = false
                 self.fileTransfer.reset()
             }
         }
@@ -352,6 +366,8 @@ public final class SyncEngine: ObservableObject {
             fileTransfer.handleChunk(frame.payload)
         case .fileDone:
             fileTransfer.handleDone(frame.payload)
+        case .findPhoneStop:
+            isFindingPhone = false
         case .videoConfig:
             decoder.handleConfig(frame.payload)
         case .videoFrame:

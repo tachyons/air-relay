@@ -42,6 +42,17 @@ class FrameCodecTest {
     }
 
     @Test
+    fun `find phone wire format matches spec`() {
+        val out = ByteArrayOutputStream()
+        FrameCodec.write(DataOutputStream(out), Frame(FrameType.FIND_PHONE, ByteArray(0)))
+        assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0x70), out.toByteArray())
+
+        val stop = ByteArrayOutputStream()
+        FrameCodec.write(DataOutputStream(stop), Frame(FrameType.FIND_PHONE_STOP, ByteArray(0)))
+        assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0x71), stop.toByteArray())
+    }
+
+    @Test
     fun `rejects unknown type`() {
         val bytes = byteArrayOf(0, 0, 0, 1, 0xFF.toByte())
         assertThrows(IOException::class.java) {
