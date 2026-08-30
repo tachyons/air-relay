@@ -297,6 +297,11 @@ struct MenuBarView: View {
     private var cameraPreview: CameraPreviewController { Self.sharedCameraPreview }
 }
 
+#Preview("Menu bar") {
+    MenuBarView()
+        .environmentObject(SyncEngine())
+}
+
 private struct NotificationRow: View {
     let item: NotificationPayload
     let onReply: (String) -> Void

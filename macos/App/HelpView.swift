@@ -62,3 +62,7 @@ struct HelpView: View {
         }
     }
 }
+
+#Preview("Help") {
+    HelpView()
+}

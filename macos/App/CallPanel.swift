@@ -139,3 +139,24 @@ struct CallPanelView: View {
         .frame(width: 320)
     }
 }
+
+private func previewCall(state: String) -> CallState? {
+    let json = """
+    {"callId":"preview","state":"\(state)","displayName":"Jane Appleseed","number":"+1 555 0100"}
+    """
+    return try? JSONDecoder().decode(CallState.self, from: Data(json.utf8))
+}
+
+#Preview("Ringing") {
+    if let call = previewCall(state: "ringing") {
+        CallPanelView(call: call)
+            .environmentObject(SyncEngine())
+    }
+}
+
+#Preview("Active") {
+    if let call = previewCall(state: "active") {
+        CallPanelView(call: call)
+            .environmentObject(SyncEngine())
+    }
+}

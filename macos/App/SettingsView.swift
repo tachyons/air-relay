@@ -66,3 +66,8 @@ struct SettingsView: View {
         .frame(width: 420, height: 460)
     }
 }
+
+#Preview("Settings") {
+    SettingsView()
+        .environmentObject(SyncEngine())
+}

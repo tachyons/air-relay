@@ -31,3 +31,9 @@ struct QRCodeView: View {
         return image
     }
 }
+
+#Preview("QR code") {
+    QRCodeView(payload: "airrelay://pair?fp=abc123&port=52431&name=Preview%20Mac")
+        .frame(width: 160, height: 160)
+        .padding()
+}
