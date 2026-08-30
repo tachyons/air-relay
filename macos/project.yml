@@ -1,0 +1,62 @@
+name: AirRelay
+options:
+  bundleIdPrefix: in.aboobacker
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  AirRelayKit:
+    path: AirRelayKit
+targets:
+  AirRelay:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+      - path: Support/Assets.xcassets
+    dependencies:
+      - package: AirRelayKit
+        product: AirRelayKit
+    info:
+      path: Support/Info.plist
+      properties:
+        CFBundleName: AirRelay
+        CFBundleDisplayName: Air Relay
+        CFBundleIdentifier: in.aboobacker.airrelay.mac
+        CFBundleShortVersionString: "0.2.0"
+        CFBundleVersion: "2"
+        CFBundleIconName: AppIcon
+        LSMinimumSystemVersion: "14.0"
+        LSUIElement: true
+        NSLocalNetworkUsageDescription: >-
+          Air Relay discovers and syncs notifications, clipboard, files, and
+          camera feeds with your Android device on your local network.
+        NSBonjourServices:
+          - _syncbridge._tcp
+        NSServices:
+          - NSMenuItem:
+              default: Send to Phone
+            NSMessage: sendToPhone
+            NSPortName: AirRelay
+            NSRequiredContext: {}
+            NSSendFileTypes:
+              - public.item
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: in.aboobacker.airrelay.mac
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        ENABLE_HARDENED_RUNTIME: false
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        SWIFT_VERSION: "6.0"
+schemes:
+  AirRelay:
+    build:
+      targets:
+        AirRelay: all
+    run:
+      config: Debug
+    archive:
+      config: Release

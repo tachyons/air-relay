@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="send_clipboard"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:shortcutShortLabel="@string/shortcut_send_clipboard_short"
+        android:shortcutLongLabel="@string/shortcut_send_clipboard_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="in.aboobacker.airrelay"
+            android:targetClass="in.aboobacker.airrelay.sync.ClipboardReadActivity" />
+    </shortcut>
+    <share-target android:targetClass="in.aboobacker.airrelay.MainActivity">
+        <data android:mimeType="*/*" />
+        <category android:name="in.aboobacker.airrelay.category.SHARE_TARGET" />
+    </share-target>
+</shortcuts>
