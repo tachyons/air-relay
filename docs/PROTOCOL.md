@@ -55,6 +55,7 @@ All messages after the TLS handshake use length-prefixed frames:
 | 0x52 | VIDEO_CONFIG    | binary  | android → mac (SPS/PPS) |
 | 0x53 | VIDEO_FRAME     | binary  | android → mac |
 | 0x60 | DEVICE_STATUS   | JSON    | android → mac |
+| 0x61 | HOTSPOT_OPEN    | empty   | mac → android |
 
 ## JSON payload schemas
 
@@ -123,8 +124,18 @@ Binary: `pts_us (u64 BE) || flags (u8, bit0 = keyframe) || Annex-B NAL units`.
 
 ### DEVICE_STATUS
 ```json
-{ "battery": 87, "charging": false, "wifiSsid": "Home" }
+{ "battery": 87, "charging": false, "wifiSsid": "Home", "networkType": "wifi|cellular|none", "signalLevel": 3 }
 ```
+
+`networkType` describes the phone's active default network. `signalLevel`
+is 0–4 (cellular signal bars), present only when `networkType` is
+`"cellular"`. Both fields are optional for backward compatibility.
+
+### HOTSPOT_OPEN
+
+Empty. Asks the phone to open its hotspot settings screen so the user can
+flip the toggle — Android does not let third-party apps enable the hotspot
+programmatically, so the final tap always happens on the phone.
 
 ## Keepalive & reconnection
 

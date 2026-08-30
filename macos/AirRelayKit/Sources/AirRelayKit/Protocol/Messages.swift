@@ -101,6 +101,8 @@ public struct DeviceStatus: Codable, Sendable {
     public var battery: Int
     public var charging: Bool
     public var wifiSsid: String?
+    public var networkType: String?
+    public var signalLevel: Int?
 }
 
 public struct FileMeta: Codable, Sendable {

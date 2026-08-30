@@ -42,6 +42,29 @@ class FrameCodecTest {
     }
 
     @Test
+    fun `hotspot open wire format matches spec`() {
+        val out = ByteArrayOutputStream()
+        FrameCodec.write(DataOutputStream(out), Frame(FrameType.HOTSPOT_OPEN, ByteArray(0)))
+        assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0x61), out.toByteArray())
+    }
+
+    @Test
+    fun `device status decodes shared vector with connectivity`() {
+        val json = """{"battery":87,"charging":false,"wifiSsid":"Home","networkType":"cellular","signalLevel":3}"""
+        val status = ProtocolJson.decodeFromString<DeviceStatus>(json)
+        assertEquals("cellular", status.networkType)
+        assertEquals(3, status.signalLevel)
+    }
+
+    @Test
+    fun `device status decodes without connectivity for backward compatibility`() {
+        val json = """{"battery":87,"charging":false}"""
+        val status = ProtocolJson.decodeFromString<DeviceStatus>(json)
+        assertEquals(null, status.networkType)
+        assertEquals(null, status.signalLevel)
+    }
+
+    @Test
     fun `rejects unknown type`() {
         val bytes = byteArrayOf(0, 0, 0, 1, 0xFF.toByte())
         assertThrows(IOException::class.java) {

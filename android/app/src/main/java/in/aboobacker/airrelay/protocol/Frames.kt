@@ -23,7 +23,8 @@ enum class FrameType(val code: Int) {
     CAMERA_STOP(0x51),
     VIDEO_CONFIG(0x52),
     VIDEO_FRAME(0x53),
-    DEVICE_STATUS(0x60);
+    DEVICE_STATUS(0x60),
+    HOTSPOT_OPEN(0x61);
 
     companion object {
         private val byCode = entries.associateBy { it.code }

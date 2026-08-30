@@ -73,4 +73,6 @@ data class DeviceStatus(
     val battery: Int,
     val charging: Boolean,
     val wifiSsid: String? = null,
+    val networkType: String? = null,
+    val signalLevel: Int? = null,
 )

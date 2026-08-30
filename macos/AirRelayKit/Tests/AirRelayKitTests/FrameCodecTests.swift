@@ -24,6 +24,24 @@ final class FrameCodecTests: XCTestCase {
         XCTAssertNil(try FrameCodec.decode(from: &buffer))
     }
 
+    func testHotspotOpenWireFormatMatchesSpec() {
+        XCTAssertEqual(FrameCodec.encode(Frame(type: .hotspotOpen)), Data([0, 0, 0, 1, 0x61]))
+    }
+
+    func testDeviceStatusDecodesSharedVectorWithConnectivity() throws {
+        let json = #"{"battery":87,"charging":false,"wifiSsid":"Home","networkType":"cellular","signalLevel":3}"#
+        let status = try JSONDecoder().decode(DeviceStatus.self, from: Data(json.utf8))
+        XCTAssertEqual(status.networkType, "cellular")
+        XCTAssertEqual(status.signalLevel, 3)
+    }
+
+    func testDeviceStatusDecodesWithoutConnectivityForBackwardCompatibility() throws {
+        let json = #"{"battery":87,"charging":false}"#
+        let status = try JSONDecoder().decode(DeviceStatus.self, from: Data(json.utf8))
+        XCTAssertNil(status.networkType)
+        XCTAssertNil(status.signalLevel)
+    }
+
     func testRejectsUnknownType() {
         var buffer = Data([0, 0, 0, 1, 0xFF])
         XCTAssertThrowsError(try FrameCodec.decode(from: &buffer))

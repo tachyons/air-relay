@@ -245,6 +245,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
                 FrameType.FILE_DONE -> fileTransfer.onDone(frame)
                 FrameType.CAMERA_START -> handleCameraStart(frame)
                 FrameType.CAMERA_STOP -> handleCameraStop()
+                FrameType.HOTSPOT_OPEN -> handleHotspotOpen()
                 else -> Log.d(TAG, "Unhandled frame: ${frame.type}")
             }
         }
@@ -278,6 +279,46 @@ class SyncService : androidx.lifecycle.LifecycleService() {
             cameraStreamer?.stop()
             cameraStreamer = null
         }
+    }
+
+    /**
+     * Third-party apps cannot enable the hotspot programmatically, so open
+     * the tethering settings screen for the final tap. Android 10+ blocks
+     * activity starts from background services, so a heads-up notification
+     * carries the same intent as a reliable fallback.
+     */
+    private fun handleHotspotOpen() {
+        val tether = Intent(Intent.ACTION_MAIN)
+            .setClassName("com.android.settings", "com.android.settings.TetherSettings")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent = if (packageManager.resolveActivity(tether, 0) != null) {
+            tether
+        } else {
+            Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_HOTSPOT_ID, "Hotspot requests", NotificationManager.IMPORTANCE_HIGH),
+        )
+        val notification = Notification.Builder(this, CHANNEL_HOTSPOT_ID)
+            .setContentTitle("Your Mac wants to use your hotspot")
+            .setContentText("Tap to open hotspot settings")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentIntent(
+                android.app.PendingIntent.getActivity(
+                    this,
+                    5,
+                    intent,
+                    android.app.PendingIntent.FLAG_IMMUTABLE or
+                        android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+                ),
+            )
+            .setAutoCancel(true)
+            .build()
+        manager.notify(HOTSPOT_NOTIFICATION_ID, notification)
+        runCatching { startActivity(intent) }
+            .onFailure { Log.w(TAG, "Failed to open hotspot settings directly: ${it.message}") }
     }
 
     private fun handleCallAction(frame: Frame) {
@@ -393,7 +434,9 @@ class SyncService : androidx.lifecycle.LifecycleService() {
         private const val TAG = "SyncService"
         private const val CHANNEL_ID = "sync_status"
         private const val CHANNEL_PAIR_ID = "pairing_requests"
+        private const val CHANNEL_HOTSPOT_ID = "hotspot_requests"
         private const val NOTIFICATION_ID = 1
+        private const val HOTSPOT_NOTIFICATION_ID = 5
         private const val KEEPALIVE_INTERVAL_MS = 15_000L
         private const val PAIRING_TIMEOUT_MS = 120_000L
 
