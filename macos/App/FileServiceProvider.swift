@@ -33,4 +33,35 @@ final class FileServiceProvider: NSObject {
             engine.fileTransfer.offer(fileURL: url)
         }
     }
+
+    /// Services menu "Open on Phone": sends a selected link (or a URL found
+    /// in selected text) to the phone's default browser.
+    @objc func openOnPhone(
+        _ pasteboard: NSPasteboard,
+        userData: String,
+        error: AutoreleasingUnsafeMutablePointer<NSString>
+    ) {
+        guard engine.isConnected else {
+            error.pointee = "Air Relay is not connected to your phone." as NSString
+            return
+        }
+        guard let url = webURL(from: pasteboard) else {
+            error.pointee = "No link found in the selection." as NSString
+            return
+        }
+        engine.openOnPhone(url: url)
+    }
+
+    private func webURL(from pasteboard: NSPasteboard) -> URL? {
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL],
+           let url = urls.first(where: { $0.scheme == "http" || $0.scheme == "https" }) {
+            return url
+        }
+        guard let text = pasteboard.string(forType: .string) else { return nil }
+        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        let range = NSRange(text.startIndex..., in: text)
+        return detector?.matches(in: text, range: range)
+            .compactMap(\.url)
+            .first { $0.scheme == "http" || $0.scheme == "https" }
+    }
 }

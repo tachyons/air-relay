@@ -235,6 +235,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
                 FrameType.PING -> send(FrameType.PONG, ByteArray(0))
                 FrameType.PONG -> awaitingPongs = 0
                 FrameType.CLIPBOARD_TEXT -> handleRemoteClipboard(frame)
+                FrameType.OPEN_URL -> handleOpenUrl(frame)
                 FrameType.NOTIF_REPLY -> if (features.notificationSync) handleNotifReply(frame)
                 FrameType.NOTIF_ACTION -> if (features.notificationSync) handleNotifAction(frame)
                 FrameType.NOTIF_DISMISS -> if (features.notificationSync) NotificationRelayService.dismiss(frame)
@@ -253,6 +254,42 @@ class SyncService : androidx.lifecycle.LifecycleService() {
     private fun handleRemoteClipboard(frame: Frame) {
         val payload = ProtocolJson.decodeFromString<ClipboardText>(frame.payload.decodeToString())
         ClipboardBridge.onRemoteClipboard(this, payload.text)
+    }
+
+    private fun handleOpenUrl(frame: Frame) {
+        val payload = ProtocolJson.decodeFromString<`in`.aboobacker.airrelay.protocol.OpenUrl>(
+            frame.payload.decodeToString(),
+        )
+        val uri = android.net.Uri.parse(payload.url)
+        if (uri.scheme != "http" && uri.scheme != "https") {
+            Log.w(TAG, "Ignoring OPEN_URL with scheme ${uri.scheme}")
+            return
+        }
+        val view = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Android 10+ silently blocks activity starts from background
+        // services, so always post a tap-to-open notification as well.
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_URL_ID, "Links from Mac", NotificationManager.IMPORTANCE_HIGH),
+        )
+        val notification = Notification.Builder(this, CHANNEL_URL_ID)
+            .setContentTitle("Link from your Mac")
+            .setContentText(payload.url)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentIntent(
+                android.app.PendingIntent.getActivity(
+                    this,
+                    4,
+                    view,
+                    android.app.PendingIntent.FLAG_IMMUTABLE or
+                        android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+                ),
+            )
+            .setAutoCancel(true)
+            .build()
+        manager.notify(URL_NOTIFICATION_ID, notification)
+        runCatching { startActivity(view) }
+            .onFailure { Log.w(TAG, "Failed to open URL directly: ${it.message}") }
     }
 
     private fun handleCameraStart(frame: Frame) {
@@ -393,7 +430,9 @@ class SyncService : androidx.lifecycle.LifecycleService() {
         private const val TAG = "SyncService"
         private const val CHANNEL_ID = "sync_status"
         private const val CHANNEL_PAIR_ID = "pairing_requests"
+        private const val CHANNEL_URL_ID = "links_from_mac"
         private const val NOTIFICATION_ID = 1
+        private const val URL_NOTIFICATION_ID = 4
         private const val KEEPALIVE_INTERVAL_MS = 15_000L
         private const val PAIRING_TIMEOUT_MS = 120_000L
 

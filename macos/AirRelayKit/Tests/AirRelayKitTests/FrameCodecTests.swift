@@ -24,6 +24,16 @@ final class FrameCodecTests: XCTestCase {
         XCTAssertNil(try FrameCodec.decode(from: &buffer))
     }
 
+    func testOpenUrlWireFormatMatchesSpec() throws {
+        let payload = Data(#"{"url":"https://example.com/article"}"#.utf8)
+        var buffer = FrameCodec.encode(Frame(type: .openUrl, payload: payload))
+        XCTAssertEqual(buffer[4], 0x21)
+        let decoded = try XCTUnwrap(try FrameCodec.decode(from: &buffer))
+        XCTAssertEqual(decoded.type, .openUrl)
+        let url = try JSONDecoder().decode(OpenUrl.self, from: decoded.payload)
+        XCTAssertEqual(url.url, "https://example.com/article")
+    }
+
     func testRejectsUnknownType() {
         var buffer = Data([0, 0, 0, 1, 0xFF])
         XCTAssertThrowsError(try FrameCodec.decode(from: &buffer))

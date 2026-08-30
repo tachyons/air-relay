@@ -9,6 +9,7 @@ public enum FrameType: UInt8, Sendable {
     case notifReply = 0x12
     case notifAction = 0x13
     case clipboardText = 0x20
+    case openUrl = 0x21
     case callState = 0x30
     case callAction = 0x31
     case fileOffer = 0x40
