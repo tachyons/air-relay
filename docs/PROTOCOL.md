@@ -143,7 +143,8 @@ Binary: `pts_us (u64 BE) || flags (u8, bit0 = keyframe) || Annex-B NAL units`.
 Sent when the phone's active media session changes (new track, play/pause,
 session ended). A state with `"title": null` means nothing is playing and
 the Mac hides its now-playing row. `artPng` is album art scaled to ≤128 px,
-sent only when the track changes (the phone caches the last encoded art).
+cached per track and included with the state while that track remains active
+(including playback updates).
 
 ### MEDIA_ACTION
 ```json

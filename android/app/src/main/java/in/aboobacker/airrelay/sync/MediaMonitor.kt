@@ -152,8 +152,11 @@ class MediaMonitor(private val context: Context) {
     }
 
     private fun albumArtPng(metadata: MediaMetadata, title: String): String? {
-        val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
-        val key = "$title|$artist"
+        val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST)
+            ?: metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST).orEmpty()
+        val album = metadata.getString(MediaMetadata.METADATA_KEY_ALBUM).orEmpty()
+        val mediaId = metadata.getString(MediaMetadata.METADATA_KEY_MEDIA_ID).orEmpty()
+        val key = "$title|$artist|$album|$mediaId"
         if (key == lastArtKey) return lastArtPng
         val art = metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)
