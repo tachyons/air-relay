@@ -42,6 +42,17 @@ class FrameCodecTest {
     }
 
     @Test
+    fun `find phone wire format matches spec`() {
+        val out = ByteArrayOutputStream()
+        FrameCodec.write(DataOutputStream(out), Frame(FrameType.FIND_PHONE, ByteArray(0)))
+        assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0x70), out.toByteArray())
+
+        val stop = ByteArrayOutputStream()
+        FrameCodec.write(DataOutputStream(stop), Frame(FrameType.FIND_PHONE_STOP, ByteArray(0)))
+        assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0x71), stop.toByteArray())
+    }
+
+    @Test
     fun `call state decodes shared vector with photo`() {
         val json = """{"callId":"uuid","state":"ringing","displayName":"Alice","number":"+1555","photoPng":"aWNvbg=="}"""
         val call = ProtocolJson.decodeFromString<CallState>(json)

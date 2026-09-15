@@ -24,6 +24,13 @@ final class FrameCodecTests: XCTestCase {
         XCTAssertNil(try FrameCodec.decode(from: &buffer))
     }
 
+<    func testFindPhoneWireFormatMatchesSpec() throws {
+        XCTAssertEqual(FrameCodec.encode(Frame(type: .findPhone)), Data([0, 0, 0, 1, 0x70]))
+        XCTAssertEqual(FrameCodec.encode(Frame(type: .findPhoneStop)), Data([0, 0, 0, 1, 0x71]))
+        var buffer = Data([0, 0, 0, 1, 0x70])
+        XCTAssertEqual(try FrameCodec.decode(from: &buffer)?.type, .findPhone)
+    }
+
     func testCallStateDecodesSharedVectorWithPhoto() throws {
         let json = #"{"callId":"uuid","state":"ringing","displayName":"Alice","number":"+1555","photoPng":"aWNvbg=="}"#
         let call = try JSONDecoder().decode(CallState.self, from: Data(json.utf8))
