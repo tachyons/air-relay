@@ -24,7 +24,7 @@ final class FrameCodecTests: XCTestCase {
         XCTAssertNil(try FrameCodec.decode(from: &buffer))
     }
 
-<    func testFindPhoneWireFormatMatchesSpec() throws {
+    func testFindPhoneWireFormatMatchesSpec() throws {
         XCTAssertEqual(FrameCodec.encode(Frame(type: .findPhone)), Data([0, 0, 0, 1, 0x70]))
         XCTAssertEqual(FrameCodec.encode(Frame(type: .findPhoneStop)), Data([0, 0, 0, 1, 0x71]))
         var buffer = Data([0, 0, 0, 1, 0x70])
