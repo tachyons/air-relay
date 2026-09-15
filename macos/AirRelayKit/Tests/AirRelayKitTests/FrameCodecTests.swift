@@ -31,7 +31,7 @@ final class FrameCodecTests: XCTestCase {
         XCTAssertEqual(try FrameCodec.decode(from: &buffer)?.type, .findPhone)
     }
 
-    func testHotspotOpenWireFormatMatchesSpec() {
+<    func testHotspotOpenWireFormatMatchesSpec() {
         XCTAssertEqual(FrameCodec.encode(Frame(type: .hotspotOpen)), Data([0, 0, 0, 1, 0x61]))
     }
 
@@ -47,6 +47,16 @@ final class FrameCodecTests: XCTestCase {
         let status = try JSONDecoder().decode(DeviceStatus.self, from: Data(json.utf8))
         XCTAssertNil(status.networkType)
         XCTAssertNil(status.signalLevel)
+    }
+
+    func testOpenUrlWireFormatMatchesSpec() throws {
+        let payload = Data(#"{"url":"https://example.com/article"}"#.utf8)
+        var buffer = FrameCodec.encode(Frame(type: .openUrl, payload: payload))
+        XCTAssertEqual(buffer[4], 0x21)
+        let decoded = try XCTUnwrap(try FrameCodec.decode(from: &buffer))
+        XCTAssertEqual(decoded.type, .openUrl)
+        let url = try JSONDecoder().decode(OpenUrl.self, from: decoded.payload)
+        XCTAssertEqual(url.url, "https://example.com/article")
     }
 
     func testRejectsUnknownType() {
