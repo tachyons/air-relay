@@ -133,8 +133,8 @@ Binary: `pts_us (u64 BE) || flags (u8, bit0 = keyframe) || Annex-B NAL units`.
 Both empty. FIND_PHONE makes the phone ring at full volume on the alarm
 stream (which bypasses mute) and post a full-screen "Found it" notification.
 Ringing stops when the user taps the notification, after a 60 s timeout, or
-when either side sends FIND_PHONE_STOP (the phone echoes it so the Mac can
-update its UI).
+when the phone sends FIND_PHONE_STOP so the Mac can update its UI. A stop
+sent by the Mac is handled locally by the phone without an echo.
 
 ## Keepalive & reconnection
 

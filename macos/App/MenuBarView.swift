@@ -296,7 +296,7 @@ struct MenuBarView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(engine.isFindingPhone ? Color.accentColor : .secondary)
-            .disabled(!engine.isConnected)
+            .disabled(!engine.isConnected || engine.pendingPairing != nil)
             .help(engine.isFindingPhone ? "Stop ringing" : "Ring my phone")
             Spacer()
             Button("Quit") { NSApp.terminate(nil) }

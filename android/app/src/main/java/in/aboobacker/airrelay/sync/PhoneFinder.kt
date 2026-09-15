@@ -56,7 +56,13 @@ class PhoneFinder(private val context: Context) {
                 showNotification()
                 mainHandler.postDelayed(timeoutRunnable, TIMEOUT_MS)
                 Log.i(TAG, "Ringing for find-my-phone")
-            }.onFailure { Log.w(TAG, "Failed to ring: ${it.message}") }
+            }.onFailure {
+                Log.w(TAG, "Failed to ring: ${it.message}")
+                previousAlarmVolume?.let { saved ->
+                    runCatching { audioManager.setStreamVolume(AudioManager.STREAM_ALARM, saved, 0) }
+                }
+                previousAlarmVolume = null
+            }
         }
     }
 
@@ -99,12 +105,19 @@ class PhoneFinder(private val context: Context) {
             stopIntent,
             PendingIntent.FLAG_IMMUTABLE,
         )
+        val fullScreenIntent = Intent(context, FindPhoneActivity::class.java)
+        val fullScreenPending = PendingIntent.getActivity(
+            context,
+            4,
+            fullScreenIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         val notification = Notification.Builder(context, CHANNEL_ID)
             .setContentTitle("Ringing so you can find this phone")
             .setContentText("Tap to stop")
             .setSmallIcon(`in`.aboobacker.airrelay.R.drawable.ic_launcher_foreground)
             .setContentIntent(stopPending)
-            .setFullScreenIntent(stopPending, true)
+            .setFullScreenIntent(fullScreenPending, true)
             .setOngoing(true)
             .setAutoCancel(true)
             .build()

@@ -144,6 +144,7 @@ public final class SyncEngine: ObservableObject {
     /// NWListener can silently stop advertising after sleep.
     private func restartListener() {
         log.info("Restarting listener")
+        isFindingPhone = false
         connection?.close()
         connection = nil
         listener?.stop()
@@ -274,6 +275,9 @@ public final class SyncEngine: ObservableObject {
 
     private func attach(_ connection: SyncConnection, peerFingerprint: String) {
         let previous = self.connection
+        // Ensure finding state does not survive a connection replacement —
+        // the guarded onClose won't fire after we clear the callback.
+        isFindingPhone = false
         self.connection = connection
         previous?.onClose = nil
         previous?.close()
