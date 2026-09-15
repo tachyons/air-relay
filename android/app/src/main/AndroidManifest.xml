@@ -69,6 +69,20 @@
         </activity>
 
         <activity
+            android:name=".sync.OpenOnMacActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:label="@string/share_open_on_mac"
+            android:theme="@style/Theme.AirRelay.Transparent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".sync.ClipboardReadActivity"
             android:exported="true"
             android:excludeFromRecents="true"

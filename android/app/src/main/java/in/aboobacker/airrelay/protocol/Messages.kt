@@ -42,6 +42,9 @@ data class NotificationAction(val key: String, val action: String)
 data class ClipboardText(val text: String, val ts: Long)
 
 @Serializable
+data class OpenUrl(val url: String)
+
+@Serializable
 data class CallState(
     val callId: String,
     val state: String,

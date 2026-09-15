@@ -13,6 +13,7 @@ enum class FrameType(val code: Int) {
     NOTIF_REPLY(0x12),
     NOTIF_ACTION(0x13),
     CLIPBOARD_TEXT(0x20),
+    OPEN_URL(0x21),
     CALL_STATE(0x30),
     CALL_ACTION(0x31),
     FILE_OFFER(0x40),

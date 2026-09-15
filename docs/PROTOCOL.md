@@ -44,6 +44,7 @@ All messages after the TLS handshake use length-prefixed frames:
 | 0x12 | NOTIF_REPLY     | JSON    | mac → android |
 | 0x13 | NOTIF_ACTION    | JSON    | mac → android |
 | 0x20 | CLIPBOARD_TEXT  | JSON    | both      |
+| 0x21 | OPEN_URL        | JSON    | both      |
 | 0x30 | CALL_STATE      | JSON    | android → mac |
 | 0x31 | CALL_ACTION     | JSON    | mac → android |
 | 0x40 | FILE_OFFER      | JSON    | both      |
@@ -91,6 +92,15 @@ All JSON is UTF-8, camelCase keys.
 ```json
 { "text": "…", "ts": 1735500000000 }
 ```
+
+### OPEN_URL
+```json
+{ "url": "https://example.com/article" }
+```
+
+The receiver opens the URL in the default browser (`NSWorkspace.open` on
+macOS, `Intent.ACTION_VIEW` on Android). Only http/https URLs are accepted;
+anything else is ignored.
 
 ### CALL_STATE
 ```json

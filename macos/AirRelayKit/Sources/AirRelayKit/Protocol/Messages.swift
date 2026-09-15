@@ -66,6 +66,14 @@ public struct ClipboardText: Codable, Sendable {
     }
 }
 
+public struct OpenUrl: Codable, Sendable {
+    public var url: String
+
+    public init(url: String) {
+        self.url = url
+    }
+}
+
 public struct CallState: Codable, Sendable {
     public var callId: String
     public var state: String
