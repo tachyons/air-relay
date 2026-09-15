@@ -56,6 +56,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
     private lateinit var features: FeaturePrefs
     private lateinit var statusReporter: DeviceStatusReporter
     private lateinit var phoneFinder: PhoneFinder
+    private lateinit var mediaMonitor: MediaMonitor
     lateinit var fileTransfer: FileTransfer
         private set
     private var cameraStreamer: CameraStreamer? = null
@@ -74,6 +75,8 @@ class SyncService : androidx.lifecycle.LifecycleService() {
         callMonitor.start()
         statusReporter = DeviceStatusReporter(this)
         phoneFinder = PhoneFinder(this)
+        mediaMonitor = MediaMonitor(this)
+        mediaMonitor.start()
         fileTransfer = FileTransfer(this)
     }
 
@@ -128,6 +131,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
                 sendHello()
                 startKeepalive(tls)
                 statusReporter.start(scope)
+                mediaMonitor.resend()
                 drainPendingShares()
                 readLoop(tls)
             } catch (e: Exception) {
@@ -243,6 +247,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
                 FrameType.NOTIF_ACTION -> if (features.notificationSync) handleNotifAction(frame)
                 FrameType.NOTIF_DISMISS -> if (features.notificationSync) NotificationRelayService.dismiss(frame)
                 FrameType.CALL_ACTION -> handleCallAction(frame)
+                FrameType.MEDIA_ACTION -> handleMediaAction(frame)
                 FrameType.FILE_OFFER -> fileTransfer.onOffer(frame)
                 FrameType.FILE_ACCEPT -> fileTransfer.onAccept(frame, scope)
                 FrameType.FILE_CHUNK -> fileTransfer.onChunk(frame)
@@ -320,6 +325,13 @@ class SyncService : androidx.lifecycle.LifecycleService() {
             cameraStreamer?.stop()
             cameraStreamer = null
         }
+    }
+
+    private fun handleMediaAction(frame: Frame) {
+        val action = ProtocolJson.decodeFromString<`in`.aboobacker.airrelay.protocol.MediaAction>(
+            frame.payload.decodeToString(),
+        )
+        mediaMonitor.execute(action)
     }
 
     private fun handleCallAction(frame: Frame) {
@@ -416,6 +428,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
         instance = null
         callMonitor.stop()
         statusReporter.stop()
+        mediaMonitor.stop()
         phoneFinder.stop(notifyPeer = false)
         cameraStreamer?.stop()
         keepaliveJob?.cancel()

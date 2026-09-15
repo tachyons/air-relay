@@ -23,6 +23,8 @@ public enum FrameType: UInt8, Sendable {
     case deviceStatus = 0x60
     case findPhone = 0x70
     case findPhoneStop = 0x71
+    case mediaState = 0x80
+    case mediaAction = 0x81
 }
 
 public struct Frame: Sendable, Equatable {

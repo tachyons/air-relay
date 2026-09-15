@@ -106,6 +106,23 @@ public struct CameraStart: Codable, Sendable {
     }
 }
 
+public struct MediaState: Codable, Sendable {
+    public var packageName: String?
+    public var appName: String?
+    public var title: String?
+    public var artist: String?
+    public var playing: Bool
+    public var artPng: String?
+}
+
+public struct MediaAction: Codable, Sendable {
+    public var action: String
+
+    public init(action: String) {
+        self.action = action
+    }
+}
+
 public struct DeviceStatus: Codable, Sendable {
     public var battery: Int
     public var charging: Bool

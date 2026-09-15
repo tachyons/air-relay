@@ -58,6 +58,8 @@ All messages after the TLS handshake use length-prefixed frames:
 | 0x60 | DEVICE_STATUS   | JSON    | android → mac |
 | 0x70 | FIND_PHONE      | empty   | mac → android |
 | 0x71 | FIND_PHONE_STOP | empty   | both      |
+| 0x80 | MEDIA_STATE     | JSON    | android → mac |
+| 0x81 | MEDIA_ACTION    | JSON    | mac → android |
 
 ## JSON payload schemas
 
@@ -143,13 +145,38 @@ Binary: `pts_us (u64 BE) || flags (u8, bit0 = keyframe) || Annex-B NAL units`.
 { "battery": 87, "charging": false, "wifiSsid": "Home" }
 ```
 
-### FIND_PHONE / FIND_PHONE_STOP
+<### FIND_PHONE / FIND_PHONE_STOP
 
 Both empty. FIND_PHONE makes the phone ring at full volume on the alarm
 stream (which bypasses mute) and post a full-screen "Found it" notification.
 Ringing stops when the user taps the notification, after a 60 s timeout, or
 when the phone sends FIND_PHONE_STOP so the Mac can update its UI. A stop
 sent by the Mac is handled locally by the phone without an echo.
+
+### MEDIA_STATE
+```json
+{
+  "packageName": "com.spotify.music",
+  "appName": "Spotify",
+  "title": "Song",
+  "artist": "Artist",
+  "playing": true,
+  "artPng": "<base64, optional>"
+}
+```
+
+Sent when the phone's active media session changes (new track, play/pause,
+session ended). A state with `"title": null` means nothing is playing and
+the Mac hides its now-playing row. `artPng` is album art scaled to ≤128 px,
+cached per track and included with the state while that track remains active
+(including playback updates).
+
+### MEDIA_ACTION
+```json
+{ "action": "play|pause|next|previous" }
+```
+
+Applied to the phone's most recent active media session.
 
 ## Keepalive & reconnection
 

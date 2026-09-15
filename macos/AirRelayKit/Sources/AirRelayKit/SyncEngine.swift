@@ -23,6 +23,7 @@ public final class SyncEngine: ObservableObject {
     @Published public private(set) var isPaired = false
     @Published public private(set) var peerName: String?
     @Published public private(set) var deviceStatus: DeviceStatus?
+    @Published public private(set) var mediaState: MediaState?
     @Published public private(set) var activeCall: CallState?
     @Published public private(set) var notifications: [NotificationPayload] = []
     @Published public private(set) var localFingerprint: String = ""
@@ -251,6 +252,14 @@ public final class SyncEngine: ObservableObject {
         sendJSON(.callAction, CallAction(callId: callId, action: action))
     }
 
+    /// Controls the phone's current media session (play/pause/next/previous).
+    public func sendMediaAction(_ action: String) {
+        sendJSON(.mediaAction, MediaAction(action: action))
+        // Optimistic toggle so the button doesn't lag the round trip.
+        if action == "play" { mediaState?.playing = true }
+        if action == "pause" { mediaState?.playing = false }
+    }
+
     /// Opens an http(s) link in the phone's default browser.
     public func openOnPhone(url: URL) {
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
@@ -299,6 +308,7 @@ public final class SyncEngine: ObservableObject {
                 self.isConnected = false
                 self.peerName = nil
                 self.pendingPairing = nil
+                self.mediaState = nil
                 self.isFindingPhone = false
                 self.fileTransfer.reset()
             }
@@ -374,6 +384,10 @@ public final class SyncEngine: ObservableObject {
             }
         case .deviceStatus:
             deviceStatus = try? json.decode(DeviceStatus.self, from: frame.payload)
+        case .mediaState:
+            if let state = try? json.decode(MediaState.self, from: frame.payload) {
+                mediaState = state.title == nil ? nil : state
+            }
         case .fileOffer:
             fileTransfer.handleOffer(frame.payload)
         case .fileAccept:
