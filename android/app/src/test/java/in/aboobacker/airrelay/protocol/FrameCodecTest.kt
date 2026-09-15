@@ -53,6 +53,21 @@ class FrameCodecTest {
     }
 
     @Test
+    fun `call state decodes shared vector with photo`() {
+        val json = """{"callId":"uuid","state":"ringing","displayName":"Alice","number":"+1555","photoPng":"aWNvbg=="}"""
+        val call = ProtocolJson.decodeFromString<CallState>(json)
+        assertEquals("aWNvbg==", call.photoPng)
+        assertEquals("Alice", call.displayName)
+    }
+
+    @Test
+    fun `call state decodes without photo for backward compatibility`() {
+        val json = """{"callId":"uuid","state":"active"}"""
+        val call = ProtocolJson.decodeFromString<CallState>(json)
+        assertEquals(null, call.photoPng)
+    }
+
+    @Test
     fun `open url wire format matches spec`() {
         val payload = """{"url":"https://example.com/article"}"""
         val out = ByteArrayOutputStream()

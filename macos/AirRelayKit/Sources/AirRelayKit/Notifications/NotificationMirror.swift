@@ -128,12 +128,30 @@ public final class NotificationMirror: NSObject, UNUserNotificationCenterDelegat
         content.sound = .defaultCritical
         content.categoryIdentifier = Self.callCategory
         content.userInfo = ["callId": call.callId]
+        if let attachment = photoAttachment(call) {
+            content.attachments = [attachment]
+        }
         let request = UNNotificationRequest(
             identifier: "call-\(call.callId)",
             content: content,
             trigger: nil
         )
         UNUserNotificationCenter.current().add(request)
+    }
+
+    /// Writes the caller's contact photo to a temp file so it can be shown
+    /// in the call notification (UNNotificationAttachment requires a URL).
+    private func photoAttachment(_ call: CallState) -> UNNotificationAttachment? {
+        guard let base64 = call.photoPng, let data = Data(base64Encoded: base64) else { return nil }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("airrelay-caller-\(call.callId).png")
+        do {
+            try data.write(to: url)
+            return try UNNotificationAttachment(identifier: "callerPhoto", url: url)
+        } catch {
+            log.warning("Caller photo attachment failed: \(error)")
+            return nil
+        }
     }
 
     public func dismiss(key: String) {

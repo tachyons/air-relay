@@ -59,13 +59,34 @@ struct CallPanelView: View {
         call.displayName ?? call.number ?? "Unknown caller"
     }
 
+    private var contactPhoto: NSImage? {
+        guard let base64 = call.photoPng,
+              let data = Data(base64Encoded: base64)
+        else { return nil }
+        return NSImage(data: data)
+    }
+
     var body: some View {
         VStack(spacing: 14) {
             VStack(spacing: 4) {
-                Image(systemName: "phone.circle.fill")
-                    .font(.system(size: 36))
-                    .foregroundStyle(call.state == "ringing" ? .green : .blue)
-                    .symbolEffect(.pulse, isActive: call.state == "ringing")
+                if let photo = contactPhoto {
+                    Image(nsImage: photo)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 48, height: 48)
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle().strokeBorder(
+                                call.state == "ringing" ? Color.green : Color.blue,
+                                lineWidth: 2
+                            )
+                        )
+                } else {
+                    Image(systemName: "phone.circle.fill")
+                        .font(.system(size: 36))
+                        .foregroundStyle(call.state == "ringing" ? .green : .blue)
+                        .symbolEffect(.pulse, isActive: call.state == "ringing")
+                }
                 Text(callerName)
                     .font(.title3.bold())
                     .lineLimit(1)
