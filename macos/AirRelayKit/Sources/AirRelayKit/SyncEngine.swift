@@ -264,7 +264,7 @@ public final class SyncEngine: ObservableObject {
         decoder.invalidate()
     }
 
-<    /// Asks the phone to open its hotspot settings — the user flips the
+    /// Asks the phone to open its hotspot settings — the user flips the
     /// toggle there (Android does not allow enabling it remotely).
     public func requestHotspot() {
         guard !quarantined else { return }
