@@ -89,6 +89,14 @@
             android:taskAffinity=""
             android:theme="@style/Theme.AirRelay.Transparent" />
 
+        <activity
+            android:name=".sync.FindPhoneActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:theme="@style/Theme.AirRelay.Transparent" />
+
         <service
             android:name=".sync.ClipboardTileService"
             android:exported="true"

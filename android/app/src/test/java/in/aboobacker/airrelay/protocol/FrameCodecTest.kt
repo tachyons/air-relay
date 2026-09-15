@@ -42,6 +42,17 @@ class FrameCodecTest {
     }
 
     @Test
+    fun `find phone wire format matches spec`() {
+        val out = ByteArrayOutputStream()
+        FrameCodec.write(DataOutputStream(out), Frame(FrameType.FIND_PHONE, ByteArray(0)))
+        assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0x70), out.toByteArray())
+
+        val stop = ByteArrayOutputStream()
+        FrameCodec.write(DataOutputStream(stop), Frame(FrameType.FIND_PHONE_STOP, ByteArray(0)))
+        assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0x71), stop.toByteArray())
+    }
+
+    @Test
     fun `open url wire format matches spec`() {
         val payload = """{"url":"https://example.com/article"}"""
         val out = ByteArrayOutputStream()
