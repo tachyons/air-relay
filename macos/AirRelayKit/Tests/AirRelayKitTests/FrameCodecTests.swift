@@ -31,7 +31,7 @@ final class FrameCodecTests: XCTestCase {
         XCTAssertEqual(try FrameCodec.decode(from: &buffer)?.type, .findPhone)
     }
 
-    func testMediaFramesWireFormatMatchesSpec() {
+<    func testMediaFramesWireFormatMatchesSpec() {
         XCTAssertEqual(FrameCodec.encode(Frame(type: .mediaState))[4], 0x80)
         XCTAssertEqual(FrameCodec.encode(Frame(type: .mediaAction))[4], 0x81)
     }
@@ -54,6 +54,19 @@ final class FrameCodecTests: XCTestCase {
         let data = try JSONEncoder().encode(MediaAction(action: "next"))
         let decoded = try JSONDecoder().decode(MediaAction.self, from: data)
         XCTAssertEqual(decoded.action, "next")
+    }
+
+    func testCallStateDecodesSharedVectorWithPhoto() throws {
+        let json = #"{"callId":"uuid","state":"ringing","displayName":"Alice","number":"+1555","photoPng":"aWNvbg=="}"#
+        let call = try JSONDecoder().decode(CallState.self, from: Data(json.utf8))
+        XCTAssertEqual(call.photoPng, "aWNvbg==")
+        XCTAssertEqual(call.displayName, "Alice")
+    }
+
+    func testCallStateDecodesWithoutPhotoForBackwardCompatibility() throws {
+        let json = #"{"callId":"uuid","state":"active"}"#
+        let call = try JSONDecoder().decode(CallState.self, from: Data(json.utf8))
+        XCTAssertNil(call.photoPng)
     }
 
     func testOpenUrlWireFormatMatchesSpec() throws {

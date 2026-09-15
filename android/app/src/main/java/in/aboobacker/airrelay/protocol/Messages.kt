@@ -50,6 +50,7 @@ data class CallState(
     val state: String,
     val displayName: String? = null,
     val number: String? = null,
+    val photoPng: String? = null,
 )
 
 @Serializable
