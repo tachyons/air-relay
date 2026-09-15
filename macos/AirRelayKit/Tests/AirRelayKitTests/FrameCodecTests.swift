@@ -31,7 +31,7 @@ final class FrameCodecTests: XCTestCase {
         XCTAssertEqual(try FrameCodec.decode(from: &buffer)?.type, .findPhone)
     }
 
-<    func testMediaFramesWireFormatMatchesSpec() {
+    func testMediaFramesWireFormatMatchesSpec() {
         XCTAssertEqual(FrameCodec.encode(Frame(type: .mediaState))[4], 0x80)
         XCTAssertEqual(FrameCodec.encode(Frame(type: .mediaAction))[4], 0x81)
     }
