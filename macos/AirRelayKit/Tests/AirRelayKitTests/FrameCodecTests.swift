@@ -31,7 +31,7 @@ final class FrameCodecTests: XCTestCase {
         XCTAssertEqual(try FrameCodec.decode(from: &buffer)?.type, .findPhone)
     }
 
-<    func testHotspotOpenWireFormatMatchesSpec() {
+    func testHotspotOpenWireFormatMatchesSpec() {
         XCTAssertEqual(FrameCodec.encode(Frame(type: .hotspotOpen)), Data([0, 0, 0, 1, 0x61]))
     }
 
