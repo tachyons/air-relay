@@ -56,6 +56,8 @@ All messages after the TLS handshake use length-prefixed frames:
 | 0x53 | VIDEO_FRAME     | binary  | android → mac |
 | 0x60 | DEVICE_STATUS   | JSON    | android → mac |
 | 0x61 | HOTSPOT_OPEN    | empty   | mac → android |
+| 0x70 | FIND_PHONE      | empty   | mac → android |
+| 0x71 | FIND_PHONE_STOP | empty   | both      |
 
 ## JSON payload schemas
 
@@ -127,7 +129,7 @@ Binary: `pts_us (u64 BE) || flags (u8, bit0 = keyframe) || Annex-B NAL units`.
 { "battery": 87, "charging": false, "wifiSsid": "Home", "networkType": "wifi|cellular|none", "signalLevel": 3 }
 ```
 
-`networkType` describes the phone's active default network. `signalLevel`
+<`networkType` describes the phone's active default network. `signalLevel`
 is 0–4 (cellular signal bars), present only when `networkType` is
 `"cellular"`. Both fields are optional for backward compatibility.
 
@@ -136,6 +138,14 @@ is 0–4 (cellular signal bars), present only when `networkType` is
 Empty. Asks the phone to open its hotspot settings screen so the user can
 flip the toggle — Android does not let third-party apps enable the hotspot
 programmatically, so the final tap always happens on the phone.
+
+### FIND_PHONE / FIND_PHONE_STOP
+
+Both empty. FIND_PHONE makes the phone ring at full volume on the alarm
+stream (which bypasses mute) and post a full-screen "Found it" notification.
+Ringing stops when the user taps the notification, after a 60 s timeout, or
+when the phone sends FIND_PHONE_STOP so the Mac can update its UI. A stop
+sent by the Mac is handled locally by the phone without an echo.
 
 ## Keepalive & reconnection
 

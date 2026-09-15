@@ -21,6 +21,8 @@ public enum FrameType: UInt8, Sendable {
     case videoFrame = 0x53
     case deviceStatus = 0x60
     case hotspotOpen = 0x61
+    case findPhone = 0x70
+    case findPhoneStop = 0x71
 }
 
 public struct Frame: Sendable, Equatable {
