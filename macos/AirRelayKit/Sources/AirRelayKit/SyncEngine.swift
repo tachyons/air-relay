@@ -137,6 +137,7 @@ public final class SyncEngine: ObservableObject {
         listener?.stop()
         listener = nil
         isConnected = false
+        deviceStatus = nil
     }
 
     /// Restarts the Bonjour listener after wake or network changes; a stale
@@ -148,6 +149,7 @@ public final class SyncEngine: ObservableObject {
         listener?.stop()
         listener = nil
         isConnected = false
+        deviceStatus = nil
         start()
     }
 
@@ -231,6 +233,7 @@ public final class SyncEngine: ObservableObject {
         connection?.close()
         connection = nil
         isConnected = false
+        deviceStatus = nil
     }
 
     public func unpair() {
@@ -268,6 +271,7 @@ public final class SyncEngine: ObservableObject {
 
     private func attach(_ connection: SyncConnection, peerFingerprint: String) {
         let previous = self.connection
+        deviceStatus = nil
         self.connection = connection
         previous?.onClose = nil
         previous?.close()
@@ -283,6 +287,7 @@ public final class SyncEngine: ObservableObject {
                 self.isConnected = false
                 self.peerName = nil
                 self.pendingPairing = nil
+                self.deviceStatus = nil
                 self.fileTransfer.reset()
             }
         }
