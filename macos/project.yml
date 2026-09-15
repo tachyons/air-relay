@@ -41,6 +41,14 @@ targets:
             NSRequiredContext: {}
             NSSendFileTypes:
               - public.item
+          - NSMenuItem:
+              default: Open on Phone
+            NSMessage: openOnPhone
+            NSPortName: AirRelay
+            NSRequiredContext: {}
+            NSSendTypes:
+              - NSStringPboardType
+              - public.url
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: in.aboobacker.airrelay.mac
