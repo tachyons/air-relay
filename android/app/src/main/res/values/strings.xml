@@ -3,6 +3,7 @@
     <string name="tile_send_clipboard">Send clipboard to Mac</string>
     <string name="tile_sync_toggle">Air Relay sync</string>
     <string name="process_text_send_to_mac">Send to Mac</string>
+    <string name="share_open_on_mac">Open on Mac</string>
     <string name="shortcut_send_clipboard_short">Send clipboard</string>
     <string name="shortcut_send_clipboard_long">Send clipboard to Mac</string>
     <string name="shortcut_open_short">Open</string>

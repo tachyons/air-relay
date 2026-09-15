@@ -53,6 +53,19 @@ class FrameCodecTest {
     }
 
     @Test
+    fun `open url wire format matches spec`() {
+        val payload = """{"url":"https://example.com/article"}"""
+        val out = ByteArrayOutputStream()
+        FrameCodec.write(DataOutputStream(out), Frame(FrameType.OPEN_URL, payload.encodeToByteArray()))
+        val bytes = out.toByteArray()
+        assertEquals(0x21, bytes[4].toInt())
+        val decoded = FrameCodec.read(DataInputStream(ByteArrayInputStream(bytes)))
+        assertEquals(FrameType.OPEN_URL, decoded.type)
+        val url = ProtocolJson.decodeFromString<OpenUrl>(decoded.payload.decodeToString())
+        assertEquals("https://example.com/article", url.url)
+    }
+
+    @Test
     fun `rejects unknown type`() {
         val bytes = byteArrayOf(0, 0, 0, 1, 0xFF.toByte())
         assertThrows(IOException::class.java) {

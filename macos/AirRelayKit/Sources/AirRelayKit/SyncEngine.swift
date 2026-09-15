@@ -251,6 +251,12 @@ public final class SyncEngine: ObservableObject {
         sendJSON(.callAction, CallAction(callId: callId, action: action))
     }
 
+    /// Opens an http(s) link in the phone's default browser.
+    public func openOnPhone(url: URL) {
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
+        sendJSON(.openUrl, OpenUrl(url: url.absoluteString))
+    }
+
     public func startCamera(config: CameraStart = CameraStart()) {
         sendJSON(.cameraStart, config)
     }
@@ -359,6 +365,12 @@ public final class SyncEngine: ObservableObject {
             guard clipboardSyncEnabled else { return }
             if let payload = try? json.decode(ClipboardText.self, from: frame.payload) {
                 clipboard.applyRemote(text: payload.text)
+            }
+        case .openUrl:
+            if let payload = try? json.decode(OpenUrl.self, from: frame.payload),
+               let url = URL(string: payload.url),
+               let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+                NSWorkspace.shared.open(url)
             }
         case .deviceStatus:
             deviceStatus = try? json.decode(DeviceStatus.self, from: frame.payload)
