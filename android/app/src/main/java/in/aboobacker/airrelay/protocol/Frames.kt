@@ -24,6 +24,8 @@ enum class FrameType(val code: Int) {
     VIDEO_CONFIG(0x52),
     VIDEO_FRAME(0x53),
     DEVICE_STATUS(0x60),
+    FIND_PHONE(0x70),
+    FIND_PHONE_STOP(0x71),
     MEDIA_STATE(0x80),
     MEDIA_ACTION(0x81);
 

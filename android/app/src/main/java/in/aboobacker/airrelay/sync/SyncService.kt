@@ -55,6 +55,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
     private lateinit var callMonitor: CallMonitor
     private lateinit var features: FeaturePrefs
     private lateinit var statusReporter: DeviceStatusReporter
+    private lateinit var phoneFinder: PhoneFinder
     private lateinit var mediaMonitor: MediaMonitor
     lateinit var fileTransfer: FileTransfer
         private set
@@ -73,6 +74,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
         callMonitor = CallMonitor(this)
         callMonitor.start()
         statusReporter = DeviceStatusReporter(this)
+        phoneFinder = PhoneFinder(this)
         mediaMonitor = MediaMonitor(this)
         mediaMonitor.start()
         fileTransfer = FileTransfer(this)
@@ -83,6 +85,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
         when (intent?.action) {
             ACTION_PAIR_ACCEPT -> resolvePairing(true)
             ACTION_PAIR_DECLINE -> resolvePairing(false)
+            ACTION_FIND_PHONE_STOP -> phoneFinder.stop(notifyPeer = true)
         }
 
         startForeground(
@@ -250,6 +253,8 @@ class SyncService : androidx.lifecycle.LifecycleService() {
                 FrameType.FILE_DONE -> fileTransfer.onDone(frame)
                 FrameType.CAMERA_START -> handleCameraStart(frame)
                 FrameType.CAMERA_STOP -> handleCameraStop()
+                FrameType.FIND_PHONE -> phoneFinder.start()
+                FrameType.FIND_PHONE_STOP -> phoneFinder.stop(notifyPeer = false)
                 else -> Log.d(TAG, "Unhandled frame: ${frame.type}")
             }
         }
@@ -387,6 +392,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
         callMonitor.stop()
         statusReporter.stop()
         mediaMonitor.stop()
+        phoneFinder.stop(notifyPeer = false)
         cameraStreamer?.stop()
         keepaliveJob?.cancel()
         client?.close()
@@ -412,6 +418,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
 
         private const val ACTION_PAIR_ACCEPT = "in.aboobacker.airrelay.PAIR_ACCEPT"
         private const val ACTION_PAIR_DECLINE = "in.aboobacker.airrelay.PAIR_DECLINE"
+        const val ACTION_FIND_PHONE_STOP = "in.aboobacker.airrelay.FIND_PHONE_STOP"
 
         @Volatile
         var instance: SyncService? = null

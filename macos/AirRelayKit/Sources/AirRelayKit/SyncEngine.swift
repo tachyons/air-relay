@@ -29,6 +29,7 @@ public final class SyncEngine: ObservableObject {
     @Published public private(set) var localFingerprint: String = ""
     @Published public private(set) var lastError: String?
     @Published public private(set) var pendingPairing: PendingPairing?
+    @Published public private(set) var isFindingPhone = false
 
     private var listener: SyncListener?
     private var connection: SyncConnection?
@@ -144,6 +145,7 @@ public final class SyncEngine: ObservableObject {
     /// NWListener can silently stop advertising after sleep.
     private func restartListener() {
         log.info("Restarting listener")
+        isFindingPhone = false
         connection?.close()
         connection = nil
         listener?.stop()
@@ -268,8 +270,23 @@ public final class SyncEngine: ObservableObject {
         decoder.invalidate()
     }
 
+    public func findPhone() {
+        guard !quarantined else { return }
+        connection?.send(Frame(type: .findPhone))
+        isFindingPhone = true
+    }
+
+    public func stopFindingPhone() {
+        guard !quarantined else { return }
+        connection?.send(Frame(type: .findPhoneStop))
+        isFindingPhone = false
+    }
+
     private func attach(_ connection: SyncConnection, peerFingerprint: String) {
         let previous = self.connection
+        // Ensure finding state does not survive a connection replacement —
+        // the guarded onClose won't fire after we clear the callback.
+        isFindingPhone = false
         self.connection = connection
         previous?.onClose = nil
         previous?.close()
@@ -286,6 +303,7 @@ public final class SyncEngine: ObservableObject {
                 self.peerName = nil
                 self.pendingPairing = nil
                 self.mediaState = nil
+                self.isFindingPhone = false
                 self.fileTransfer.reset()
             }
         }
@@ -366,6 +384,8 @@ public final class SyncEngine: ObservableObject {
             fileTransfer.handleChunk(frame.payload)
         case .fileDone:
             fileTransfer.handleDone(frame.payload)
+        case .findPhoneStop:
+            isFindingPhone = false
         case .videoConfig:
             decoder.handleConfig(frame.payload)
         case .videoFrame:

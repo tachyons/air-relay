@@ -292,6 +292,20 @@ struct MenuBarView: View {
             .foregroundStyle(cameraActive ? Color.accentColor : .secondary)
             .disabled(!engine.isConnected)
             .help("Phone camera preview")
+            Button {
+                if engine.isFindingPhone {
+                    engine.stopFindingPhone()
+                } else {
+                    engine.findPhone()
+                }
+            } label: {
+                Image(systemName: engine.isFindingPhone
+                    ? "bell.and.waves.left.and.right.fill" : "bell.and.waves.left.and.right")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(engine.isFindingPhone ? Color.accentColor : .secondary)
+            .disabled(!engine.isConnected || engine.pendingPairing != nil)
+            .help(engine.isFindingPhone ? "Stop ringing" : "Ring my phone")
             Spacer()
             Button("Quit") { NSApp.terminate(nil) }
                 .buttonStyle(.plain)
