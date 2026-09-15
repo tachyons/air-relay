@@ -39,6 +39,7 @@ class CallMonitor(private val context: Context) {
     private val telecom = context.getSystemService(TelecomManager::class.java)
     private val audioManager = context.getSystemService(AudioManager::class.java)
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val bgExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private var receiver: BroadcastReceiver? = null
     private var currentCallId: String? = null
     private var currentNumber: String? = null
@@ -122,37 +123,71 @@ class CallMonitor(private val context: Context) {
             currentNumber = null
         }
 
-        val payload = CallState(
-            callId = callId,
-            state = stateName,
-            displayName = callerNumber?.let { lookupContactName(it) },
-            number = callerNumber,
-        )
-        Log.i(TAG, "Call state: $stateName number=${callerNumber != null}")
-        SyncService.instance?.send(
-            FrameType.CALL_STATE,
-            ProtocolJson.encodeToString(payload).encodeToByteArray(),
-        )
+        // Contact enrichment (ContactsProvider I/O + bitmap) is off the
+        // receiver/main thread so we don't risk ANR; a single-thread
+        // executor preserves call-state ordering.
+        bgExecutor.execute {
+            val contact = callerNumber?.let { lookupContact(it) }
+            val payload = CallState(
+                callId = callId,
+                state = stateName,
+                displayName = contact?.name,
+                number = callerNumber,
+                photoPng = contact?.photoPng,
+            )
+            Log.i(TAG, "Call state: $stateName number=${callerNumber != null}")
+            SyncService.instance?.send(
+                FrameType.CALL_STATE,
+                ProtocolJson.encodeToString(payload).encodeToByteArray(),
+            )
+        }
     }
 
-    private fun lookupContactName(number: String): String? {
+    private data class Contact(val name: String?, val photoPng: String?)
+
+    /** Cached per number so repeated state changes don't re-query or re-encode. */
+    private val contactCache = HashMap<String, Contact?>()
+
+    private fun lookupContact(number: String): Contact? {
         if (!granted(Manifest.permission.READ_CONTACTS)) return null
+        if (contactCache.containsKey(number)) return contactCache[number]
         val uri = Uri.withAppendedPath(
             ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
             Uri.encode(number),
         )
-        return runCatching {
+        val result: Contact? = runCatching {
             context.contentResolver.query(
                 uri,
-                arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME),
+                arrayOf(
+                    ContactsContract.PhoneLookup.DISPLAY_NAME,
+                    ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI,
+                ),
                 null,
                 null,
                 null,
             )?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
+                if (!cursor.moveToFirst()) return@use null
+                Contact(
+                    name = cursor.getString(0),
+                    photoPng = cursor.getString(1)?.let { encodePhoto(Uri.parse(it)) },
+                )
             }
         }.getOrNull()
+        contactCache[number] = result
+        return result
     }
+
+    /** Reads a contact photo thumbnail and re-encodes it as base64 PNG (same
+     *  pattern as notification app icons). Thumbnails are already small. */
+    private fun encodePhoto(photoUri: Uri): String? = runCatching {
+        context.contentResolver.openInputStream(photoUri)?.use { stream ->
+            val bitmap = android.graphics.BitmapFactory.decodeStream(stream) ?: return@use null
+            val out = java.io.ByteArrayOutputStream()
+            if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)) return@use null
+            bitmap.recycle()
+            android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+        }
+    }.getOrNull()
 
     @Suppress("DEPRECATION")
     fun execute(action: CallAction) {
