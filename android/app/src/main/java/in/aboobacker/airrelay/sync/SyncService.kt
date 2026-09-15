@@ -261,7 +261,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
             frame.payload.decodeToString(),
         )
         val uri = android.net.Uri.parse(payload.url)
-        if (uri.scheme != "http" && uri.scheme != "https") {
+        if (!uri.scheme.equals("http", ignoreCase = true) && !uri.scheme.equals("https", ignoreCase = true)) {
             Log.w(TAG, "Ignoring OPEN_URL with scheme ${uri.scheme}")
             return
         }

@@ -41,7 +41,7 @@ class OpenOnMacActivity : Activity() {
         val matcher = Patterns.WEB_URL.matcher(text)
         while (matcher.find()) {
             val match = matcher.group()
-            if (match.startsWith("http://") || match.startsWith("https://")) return match
+            if (match.startsWith("http://", ignoreCase = true) || match.startsWith("https://", ignoreCase = true)) return match
         }
         return null
     }

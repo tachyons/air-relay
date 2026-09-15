@@ -251,7 +251,7 @@ public final class SyncEngine: ObservableObject {
 
     /// Opens an http(s) link in the phone's default browser.
     public func openOnPhone(url: URL) {
-        guard url.scheme == "http" || url.scheme == "https" else { return }
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
         sendJSON(.openUrl, OpenUrl(url: url.absoluteString))
     }
 
@@ -351,7 +351,7 @@ public final class SyncEngine: ObservableObject {
         case .openUrl:
             if let payload = try? json.decode(OpenUrl.self, from: frame.payload),
                let url = URL(string: payload.url),
-               url.scheme == "http" || url.scheme == "https" {
+               let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
                 NSWorkspace.shared.open(url)
             }
         case .deviceStatus:

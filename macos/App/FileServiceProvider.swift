@@ -17,8 +17,8 @@ final class FileServiceProvider: NSObject {
         userData: String,
         error: AutoreleasingUnsafeMutablePointer<NSString>
     ) {
-        guard engine.isConnected else {
-            error.pointee = "Air Relay is not connected to your phone." as NSString
+        guard engine.isConnected && engine.isPaired else {
+            error.pointee = "Air Relay is not connected to a paired phone." as NSString
             return
         }
         let urls = pasteboard.readObjects(
@@ -41,8 +41,8 @@ final class FileServiceProvider: NSObject {
         userData: String,
         error: AutoreleasingUnsafeMutablePointer<NSString>
     ) {
-        guard engine.isConnected else {
-            error.pointee = "Air Relay is not connected to your phone." as NSString
+        guard engine.isConnected && engine.isPaired else {
+            error.pointee = "Air Relay is not connected to a paired phone." as NSString
             return
         }
         guard let url = webURL(from: pasteboard) else {
@@ -54,7 +54,7 @@ final class FileServiceProvider: NSObject {
 
     private func webURL(from pasteboard: NSPasteboard) -> URL? {
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL],
-           let url = urls.first(where: { $0.scheme == "http" || $0.scheme == "https" }) {
+           let url = urls.first(where: { $0.scheme?.lowercased() == "http" || $0.scheme?.lowercased() == "https" }) {
             return url
         }
         guard let text = pasteboard.string(forType: .string) else { return nil }
@@ -62,6 +62,6 @@ final class FileServiceProvider: NSObject {
         let range = NSRange(text.startIndex..., in: text)
         return detector?.matches(in: text, range: range)
             .compactMap(\.url)
-            .first { $0.scheme == "http" || $0.scheme == "https" }
+            .first { $0.scheme?.lowercased() == "http" || $0.scheme?.lowercased() == "https" }
     }
 }
