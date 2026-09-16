@@ -179,6 +179,7 @@ internal fun MainScreenContent(
             permissionLauncher.launch(missingRuntime.toTypedArray())
           },
           onSendClipboard = { ClipboardBridge.launchReadActivity(context) },
+          onShowFiles = { onNavigate(SharedFiles) },
         )
         SyncService.ConnectionState.Disconnected -> DisconnectedContent(
           isPaired = PairingStore(context).isPaired,
@@ -190,14 +191,6 @@ internal fun MainScreenContent(
   if (showSettings) {
     SettingsSheet(
       onDismiss = { showSettings = false },
-      onShowFiles = {
-        showSettings = false
-        onNavigate(SharedFiles)
-      },
-      onStopSync = {
-        SyncService.stop(context)
-        showSettings = false
-      },
       onUnpair = {
         SyncService.stop(context)
         PairingStore(context).clear()
@@ -250,8 +243,6 @@ private fun StatusBadge(connected: Boolean, pairing: Boolean = false, error: Boo
 @Composable
 private fun SettingsSheet(
   onDismiss: () -> Unit,
-  onShowFiles: () -> Unit,
-  onStopSync: () -> Unit,
   onUnpair: () -> Unit,
 ) {
   val context = LocalContext.current
@@ -295,38 +286,9 @@ private fun SettingsSheet(
         onChange = { features?.fileSharing = it },
       )
 
+      var confirmUnpair by remember { mutableStateOf(false) }
       TextButton(
-        onClick = onShowFiles,
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = ButtonDefaults.TextButtonWithIconContentPadding
-      ) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(12.dp),
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Icon(Icons.Rounded.FolderOpen, contentDescription = null)
-          Text("Files from your Mac")
-        }
-      }
-
-      TextButton(
-        onClick = onStopSync,
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = ButtonDefaults.TextButtonWithIconContentPadding
-      ) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(12.dp),
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Icon(Icons.Rounded.Close, contentDescription = null)
-          Text("Stop synchronization")
-        }
-      }
-
-      TextButton(
-        onClick = onUnpair,
+        onClick = { confirmUnpair = true },
         modifier = Modifier.fillMaxWidth(),
         contentPadding = ButtonDefaults.TextButtonWithIconContentPadding
       ) {
@@ -339,7 +301,16 @@ private fun SettingsSheet(
           Text("Unpair Mac", color = MaterialTheme.colorScheme.error)
         }
       }
-      
+      if (confirmUnpair) {
+        androidx.compose.material3.AlertDialog(
+          onDismissRequest = { confirmUnpair = false },
+          title = { Text("Unpair Mac?") },
+          text = { Text("You'll need to scan the QR code again to reconnect.") },
+          confirmButton = { TextButton(onClick = { confirmUnpair = false; onUnpair() }) { Text("Unpair") } },
+          dismissButton = { TextButton(onClick = { confirmUnpair = false }) { Text("Cancel") } }
+        )
+      }
+
       Spacer(modifier = Modifier.height(16.dp))
     }
   }
@@ -569,11 +540,25 @@ private fun ConnectedContent(
   onFixBattery: () -> Unit,
   onFixPermissions: () -> Unit,
   onSendClipboard: () -> Unit,
+  onShowFiles: () -> Unit,
 ) {
   val context = LocalContext.current
-  
+  val hasFixIt = !hasNotifAccess || missingRuntime.isNotEmpty() || !batteryExempt
+  val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+    val service = SyncService.instance
+    if (uris.isEmpty()) return@rememberLauncherForActivityResult
+    if (service == null) {
+      uris.forEach { SyncService.queueShare(it) }
+      SyncService.start(context)
+      Toast.makeText(context, "Connecting — will send when ready", Toast.LENGTH_SHORT).show()
+    } else {
+      uris.forEach { service.fileTransfer.offer(it) }
+      Toast.makeText(context, if (uris.size == 1) "Sending to Mac…" else "Sending ${uris.size} files…", Toast.LENGTH_SHORT).show()
+    }
+  }
+
   StatusBadge(connected = true)
-  
+
   Column(
     horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -594,76 +579,68 @@ private fun ConnectedContent(
         modifier = Modifier.size(16.dp)
       )
       Text(
-        text = "Connected & Syncing",
+        text = "Connected",
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
       )
     }
   }
 
-  Spacer(modifier = Modifier.height(8.dp))
-
-  Card(
-    shape = MaterialTheme.shapes.extraLarge,
-    colors = CardDefaults.cardColors(
-      containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ),
-    modifier = Modifier.fillMaxWidth()
-  ) {
-    Column(
-      modifier = Modifier.padding(20.dp),
-      verticalArrangement = Arrangement.spacedBy(20.dp)
-    ) {
-      Text("Active Features", style = MaterialTheme.typography.titleMedium)
-      
-      FeatureItem(
-        icon = Icons.Rounded.Notifications,
-        name = "Notifications",
-        enabled = hasNotifAccess,
-        description = if (hasNotifAccess) "Forwarded to Mac" else "Permission needed",
-        onClick = if (hasNotifAccess) null else onFixNotifications
-      )
-      
-      FeatureItem(
-        icon = Icons.Rounded.Computer,
-        name = "Clipboard",
-        enabled = true,
-        description = "Bidirectional sync"
-      )
-      
-      if (missingRuntime.isNotEmpty()) {
-        FeatureItem(
-            icon = Icons.Rounded.Phonelink,
-            name = "Phone calls",
-            enabled = false,
-            description = "Grant permissions",
-            onClick = onFixPermissions
-        )
+  if (hasFixIt) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+      if (!hasNotifAccess) FixItCard(icon = Icons.Rounded.Notifications, title = "Notifications need permission", action = "Fix", onClick = onFixNotifications)
+      if (missingRuntime.isNotEmpty()) FixItCard(icon = Icons.Rounded.Phonelink, title = "Phone calls need permission", action = "Grant", onClick = onFixPermissions)
+      if (!batteryExempt) FixItCard(icon = Icons.Rounded.BatteryAlert, title = "Keep connection in background", action = "Allow", onClick = onFixBattery)
+    }
+  } else {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+      Button(
+        onClick = onSendClipboard,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+      ) {
+        Icon(Icons.Rounded.Computer, contentDescription = null)
+        Spacer(Modifier.size(8.dp))
+        Text("Push clipboard to Mac")
       }
-
-      if (!batteryExempt) {
-          FeatureItem(
-              icon = Icons.Rounded.BatteryAlert,
-              name = "Background Link",
-              enabled = false,
-              description = "Exempt optimization",
-              onClick = onFixBattery
-          )
+      OutlinedButton(
+        onClick = { filePicker.launch(arrayOf("*/*")) },
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+      ) {
+        Icon(Icons.Rounded.FolderOpen, contentDescription = null)
+        Spacer(Modifier.size(8.dp))
+        Text("Send files to Mac")
       }
-      
+      TextButton(onClick = onShowFiles, modifier = Modifier.fillMaxWidth()) {
+        Text("Files from your Mac")
+      }
       SpeakerToggleItem(context)
     }
   }
+}
 
-  Button(
-    onClick = onSendClipboard,
+@Composable
+private fun FixItCard(
+  icon: androidx.compose.ui.graphics.vector.ImageVector,
+  title: String,
+  action: String,
+  onClick: () -> Unit,
+) {
+  Card(
     shape = MaterialTheme.shapes.large,
-    modifier = Modifier.fillMaxWidth().height(64.dp),
-    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    modifier = Modifier.fillMaxWidth()
   ) {
-    Icon(Icons.Rounded.Phonelink, contentDescription = null)
-    Spacer(Modifier.size(12.dp))
-    Text("Push clipboard to Mac", style = MaterialTheme.typography.titleMedium)
+    Row(
+      modifier = Modifier.padding(16.dp),
+      horizontalArrangement = Arrangement.spacedBy(12.dp),
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
+      Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
+      TextButton(onClick = onClick) { Text(action) }
+    }
   }
 }
 
