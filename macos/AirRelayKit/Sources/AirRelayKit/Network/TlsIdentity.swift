@@ -20,7 +20,10 @@ public final class TlsIdentity: Sendable {
         SHA256.hash(data: certificateData).map { String(format: "%02x", $0) }.joined()
     }
 
-    private static let label = "AirRelay Identity"
+    /// User-visible Keychain label. This is the string macOS shows in the
+    /// "Air Relay wants to sign using key \"...\" in your keychain" prompt,
+    /// so it must be plain language with no jargon (no "Identity", "Certificate", etc.).
+    private static let label = "Air Relay"
 
     public static func loadOrCreate() throws -> TlsIdentity {
         if let existing = try? loadFromKeychain() {
@@ -60,15 +63,34 @@ public final class TlsIdentity: Sendable {
             throw TlsIdentityError.keychain(errSecNoDefaultKeychain)
         }
 
+        // No .userPresence — we don't want a Touch ID / password prompt
+        // on every TLS handshake; access is gated by the login keychain
+        // being unlocked and the app's ACL. "Always Allow" will then persist.
+        let accessControl = SecAccessControlCreateWithFlags(
+            nil,
+            kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            .privateKeyUsage,
+            nil
+        )
+        var privateKeyAttrs: [String: Any] = [
+            kSecAttrIsPermanent as String: true,
+            kSecAttrIsExtractable as String: true,
+            // Label MUST be inside privateKeyAttrs — this is the "key" macOS
+            // shows in the "wants to sign using key \"...\"" prompt. Top-level
+            // kSecAttrLabel alone is not applied to the private-key item and
+            // results in the literal "<key>" placeholder seen in the screenshot.
+            kSecAttrLabel as String: label,
+        ]
+        if let accessControl {
+            privateKeyAttrs[kSecAttrAccessControl as String] = accessControl
+        }
+
         let keyAttrs: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits as String: 256,
             kSecUseKeychain as String: loginKeychain,
             kSecAttrLabel as String: label,
-            kSecPrivateKeyAttrs as String: [
-                kSecAttrIsPermanent as String: true,
-                kSecAttrIsExtractable as String: true,
-            ],
+            kSecPrivateKeyAttrs as String: privateKeyAttrs,
         ]
         var error: Unmanaged<CFError>?
         guard let secKey = SecKeyCreateRandomKey(keyAttrs as CFDictionary, &error) else {
