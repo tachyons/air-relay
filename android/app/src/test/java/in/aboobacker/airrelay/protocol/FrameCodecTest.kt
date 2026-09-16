@@ -1,5 +1,6 @@
 package `in`.aboobacker.airrelay.protocol
 
+import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -73,6 +74,39 @@ class FrameCodecTest {
         val status = ProtocolJson.decodeFromString<DeviceStatus>(json)
         assertEquals(null, status.networkType)
         assertEquals(null, status.signalLevel)
+    }
+
+    @Test
+    fun `media frames wire format matches spec`() {
+        val state = ByteArrayOutputStream()
+        FrameCodec.write(DataOutputStream(state), Frame(FrameType.MEDIA_STATE, ByteArray(0)))
+        assertEquals(0x80, state.toByteArray()[4].toInt() and 0xFF)
+
+        val action = ByteArrayOutputStream()
+        FrameCodec.write(DataOutputStream(action), Frame(FrameType.MEDIA_ACTION, ByteArray(0)))
+        assertEquals(0x81, action.toByteArray()[4].toInt() and 0xFF)
+    }
+
+    @Test
+    fun `media state decodes shared vector`() {
+        val json = """{"packageName":"com.spotify.music","appName":"Spotify","title":"Song","artist":"Artist","playing":true,"artPng":"YXJ0"}"""
+        val state = ProtocolJson.decodeFromString<MediaState>(json)
+        assertEquals("Song", state.title)
+        assertEquals(true, state.playing)
+        assertEquals("YXJ0", state.artPng)
+    }
+
+    @Test
+    fun `media state decodes empty session vector`() {
+        val state = ProtocolJson.decodeFromString<MediaState>("""{"playing":false}""")
+        assertEquals(null, state.title)
+        assertEquals(false, state.playing)
+    }
+
+    @Test
+    fun `media action round trips`() {
+        val json = ProtocolJson.encodeToString(MediaAction("next"))
+        assertEquals("next", ProtocolJson.decodeFromString<MediaAction>(json).action)
     }
 
     @Test

@@ -73,6 +73,19 @@ data class CameraStart(
 )
 
 @Serializable
+data class MediaState(
+    val packageName: String? = null,
+    val appName: String? = null,
+    val title: String? = null,
+    val artist: String? = null,
+    val playing: Boolean = false,
+    val artPng: String? = null,
+)
+
+@Serializable
+data class MediaAction(val action: String)
+
+@Serializable
 data class DeviceStatus(
     val battery: Int,
     val charging: Boolean,

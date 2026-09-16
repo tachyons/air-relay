@@ -27,7 +27,9 @@ enum class FrameType(val code: Int) {
     DEVICE_STATUS(0x60),
     HOTSPOT_OPEN(0x61),
     FIND_PHONE(0x70),
-    FIND_PHONE_STOP(0x71);
+    FIND_PHONE_STOP(0x71),
+    MEDIA_STATE(0x80),
+    MEDIA_ACTION(0x81);
 
     companion object {
         private val byCode = entries.associateBy { it.code }
