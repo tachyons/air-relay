@@ -3,8 +3,11 @@ package `in`.aboobacker.airrelay.sync
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
+import android.telephony.TelephonyManager
 import `in`.aboobacker.airrelay.protocol.DeviceStatus
 import `in`.aboobacker.airrelay.protocol.FrameType
 import `in`.aboobacker.airrelay.protocol.ProtocolJson
@@ -54,14 +57,34 @@ class DeviceStatusReporter(private val context: Context) {
                 ?.takeUnless { it == WifiManager.UNKNOWN_SSID }
         }.getOrNull()
 
+        val networkType = activeNetworkType()
         val payload = DeviceStatus(
             battery = level * 100 / scale,
             charging = plugged != 0,
             wifiSsid = ssid,
+            networkType = networkType,
+            signalLevel = if (networkType == "cellular") cellularSignalLevel() else null,
         )
         SyncService.instance?.send(
             FrameType.DEVICE_STATUS,
             ProtocolJson.encodeToString(payload).encodeToByteArray(),
         )
     }
+
+    private fun activeNetworkType(): String = runCatching {
+        val connectivity = context.getSystemService(ConnectivityManager::class.java)
+        val capabilities = connectivity.getNetworkCapabilities(connectivity.activeNetwork)
+            ?: return@runCatching "none"
+        when {
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+            else -> "none"
+        }
+    }.getOrDefault("none")
+
+    /** 0–4 bars; null when unavailable (no READ_PHONE_STATE or no modem). */
+    private fun cellularSignalLevel(): Int? = runCatching {
+        context.getSystemService(TelephonyManager::class.java)
+            .signalStrength?.level
+    }.getOrNull()
 }

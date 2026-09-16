@@ -77,10 +77,42 @@ struct MenuBarView: View {
                             ? "battery.100.bolt" : "battery.75")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if let network = networkLabel(status) {
+                            Text("·")
+                                .foregroundStyle(.secondary)
+                            Label(network.text, systemImage: network.icon)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
                 }
             }
             Spacer()
+            if engine.isConnected, engine.deviceStatus?.networkType == "cellular" {
+                Button {
+                    engine.requestHotspot()
+                } label: {
+                    Image(systemName: "personalhotspot")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Use the phone's hotspot — opens hotspot settings on the phone")
+            }
+        }
+    }
+
+    private func networkLabel(_ status: DeviceStatus) -> (text: String, icon: String)? {
+        switch status.networkType {
+        case "wifi":
+            return (status.wifiSsid ?? "Wi-Fi", "wifi")
+        case "cellular":
+            let bars = status.signalLevel.map { "\($0)/4" } ?? ""
+            return (bars.isEmpty ? "Cellular" : "Cellular \(bars)", "antenna.radiowaves.left.and.right")
+        case "none":
+            return ("Offline", "wifi.slash")
+        default:
+            return nil
         }
     }
 

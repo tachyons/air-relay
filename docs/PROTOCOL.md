@@ -56,6 +56,7 @@ All messages after the TLS handshake use length-prefixed frames:
 | 0x52 | VIDEO_CONFIG    | binary  | android → mac (SPS/PPS) |
 | 0x53 | VIDEO_FRAME     | binary  | android → mac |
 | 0x60 | DEVICE_STATUS   | JSON    | android → mac |
+| 0x61 | HOTSPOT_OPEN    | empty   | mac → android |
 | 0x70 | FIND_PHONE      | empty   | mac → android |
 | 0x71 | FIND_PHONE_STOP | empty   | both      |
 | 0x80 | MEDIA_STATE     | JSON    | android → mac |
@@ -142,10 +143,20 @@ Binary: `pts_us (u64 BE) || flags (u8, bit0 = keyframe) || Annex-B NAL units`.
 
 ### DEVICE_STATUS
 ```json
-{ "battery": 87, "charging": false, "wifiSsid": "Home" }
+{ "battery": 87, "charging": false, "wifiSsid": "Home", "networkType": "wifi|cellular|none", "signalLevel": 3 }
 ```
 
-<### FIND_PHONE / FIND_PHONE_STOP
+`networkType` describes the phone's active default network. `signalLevel`
+is 0–4 (cellular signal bars), present only when `networkType` is
+`"cellular"`. Both fields are optional for backward compatibility.
+
+### HOTSPOT_OPEN
+
+Empty. Asks the phone to open its hotspot settings screen so the user can
+flip the toggle — Android does not let third-party apps enable the hotspot
+programmatically, so the final tap always happens on the phone.
+
+### FIND_PHONE / FIND_PHONE_STOP
 
 Both empty. FIND_PHONE makes the phone ring at full volume on the alarm
 stream (which bypasses mute) and post a full-screen "Found it" notification.

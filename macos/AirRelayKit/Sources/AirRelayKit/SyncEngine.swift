@@ -139,6 +139,7 @@ public final class SyncEngine: ObservableObject {
         listener?.stop()
         listener = nil
         isConnected = false
+        deviceStatus = nil
     }
 
     /// Restarts the Bonjour listener after wake or network changes; a stale
@@ -151,6 +152,7 @@ public final class SyncEngine: ObservableObject {
         listener?.stop()
         listener = nil
         isConnected = false
+        deviceStatus = nil
         start()
     }
 
@@ -234,6 +236,7 @@ public final class SyncEngine: ObservableObject {
         connection?.close()
         connection = nil
         isConnected = false
+        deviceStatus = nil
     }
 
     public func unpair() {
@@ -276,6 +279,13 @@ public final class SyncEngine: ObservableObject {
         decoder.invalidate()
     }
 
+    /// Asks the phone to open its hotspot settings — the user flips the
+    /// toggle there (Android does not allow enabling it remotely).
+    public func requestHotspot() {
+        guard !quarantined else { return }
+        connection?.send(Frame(type: .hotspotOpen))
+    }
+
     public func findPhone() {
         guard !quarantined else { return }
         connection?.send(Frame(type: .findPhone))
@@ -290,8 +300,7 @@ public final class SyncEngine: ObservableObject {
 
     private func attach(_ connection: SyncConnection, peerFingerprint: String) {
         let previous = self.connection
-        // Ensure finding state does not survive a connection replacement —
-        // the guarded onClose won't fire after we clear the callback.
+        deviceStatus = nil
         isFindingPhone = false
         self.connection = connection
         previous?.onClose = nil
@@ -308,6 +317,7 @@ public final class SyncEngine: ObservableObject {
                 self.isConnected = false
                 self.peerName = nil
                 self.pendingPairing = nil
+                self.deviceStatus = nil
                 self.mediaState = nil
                 self.isFindingPhone = false
                 self.fileTransfer.reset()

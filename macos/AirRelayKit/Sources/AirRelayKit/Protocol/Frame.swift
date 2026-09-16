@@ -21,6 +21,7 @@ public enum FrameType: UInt8, Sendable {
     case videoConfig = 0x52
     case videoFrame = 0x53
     case deviceStatus = 0x60
+    case hotspotOpen = 0x61
     case findPhone = 0x70
     case findPhoneStop = 0x71
     case mediaState = 0x80
