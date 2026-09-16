@@ -23,26 +23,18 @@ struct MenuBarView: View {
                     .padding(12)
                 Divider()
             }
-            if let media = engine.mediaState {
-                NowPlayingRow(media: media) { action in
-                    engine.sendMediaAction(action)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                Divider()
-            }
             if !engine.fileTransfer.transfers.isEmpty {
-                transferList
-                    .padding(12)
-                Divider()
-            }
-            if !engine.fileTransfer.recentFiles.isEmpty {
-                recentFilesList
+                activeTransfers
                     .padding(12)
                 Divider()
             }
             notificationList
             Divider()
+            if !engine.fileTransfer.recentFiles.isEmpty {
+                recentFilesList
+                    .padding(12)
+                Divider()
+            }
             dropZone
             Divider()
             footer
@@ -177,9 +169,9 @@ struct MenuBarView: View {
         }
     }
 
-    // MARK: File transfer
+    // MARK: Active transfers (exclusive transient surface)
 
-    private var transferList: some View {
+    private var activeTransfers: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(engine.fileTransfer.transfers) { transfer in
                 VStack(alignment: .leading, spacing: 2) {
@@ -202,12 +194,13 @@ struct MenuBarView: View {
         }
     }
 
+    // MARK: Recent files - 5 visible, expando to 10
+
+    @State private var showAllRecent = false
+
     private var recentFilesList: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Recent files")
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
-            ForEach(engine.fileTransfer.recentFiles.prefix(5)) { file in
+            ForEach(engine.fileTransfer.recentFiles.prefix(showAllRecent ? 10 : 5)) { file in
                 Button {
                     if let url = file.url {
                         NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -229,6 +222,14 @@ struct MenuBarView: View {
                 }
                 .buttonStyle(.plain)
                 .help(file.inbound ? "Show in Finder" : "Sent to phone")
+            }
+            if engine.fileTransfer.recentFiles.count > 5 {
+                Button(showAllRecent ? "Show less" : "Show all 10 →") {
+                    withAnimation { showAllRecent.toggle() }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
             }
         }
     }
@@ -296,15 +297,7 @@ struct MenuBarView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            Button {
-                openWindow(id: "help")
-                NSApp.activate(ignoringOtherApps: true)
-            } label: {
-                Image(systemName: "questionmark.circle")
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("What Air Relay does")
+            .help("Settings")
             Button {
                 cameraActive.toggle()
                 if cameraActive {

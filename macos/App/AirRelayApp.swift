@@ -44,6 +44,17 @@ struct AirRelayApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        MenuBarExtra(isInserted: Binding(
+            get: { engine.mediaState != nil },
+            set: { _ in }
+        )) {
+            MediaWidgetView()
+                .environmentObject(engine)
+        } label: {
+            Image(systemName: "music.note")
+        }
+        .menuBarExtraStyle(.window)
+
         Settings {
             SettingsView()
                 .environmentObject(engine)
