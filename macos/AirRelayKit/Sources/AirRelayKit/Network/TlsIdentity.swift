@@ -63,34 +63,25 @@ public final class TlsIdentity: Sendable {
             throw TlsIdentityError.keychain(errSecNoDefaultKeychain)
         }
 
-        // No .userPresence — we don't want a Touch ID / password prompt
-        // on every TLS handshake; access is gated by the login keychain
-        // being unlocked and the app's ACL. "Always Allow" will then persist.
-        let accessControl = SecAccessControlCreateWithFlags(
-            nil,
-            kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-            .privateKeyUsage,
-            nil
-        )
-        var privateKeyAttrs: [String: Any] = [
-            kSecAttrIsPermanent as String: true,
-            kSecAttrIsExtractable as String: true,
-            // Label MUST be inside privateKeyAttrs — this is the "key" macOS
-            // shows in the "wants to sign using key \"...\"" prompt. Top-level
-            // kSecAttrLabel alone is not applied to the private-key item and
-            // results in the literal "<key>" placeholder seen in the screenshot.
-            kSecAttrLabel as String: label,
-        ]
-        if let accessControl {
-            privateKeyAttrs[kSecAttrAccessControl as String] = accessControl
-        }
-
+        // No SecAccessControl here: access-control objects target the
+        // data-protection keychain only, and combining one with kSecUseKeychain
+        // (the file-based login keychain) fails with OSStatus -50
+        // ("inconsistent private key parameters"). The file keychain gates
+        // access via its own ACLs instead — "Always Allow" persists after
+        // the first approval, with no prompt on every handshake.
         let keyAttrs: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-            kSecAttrKeySizeInBits as String: 256,
+            kSecAttrKeySizeInBits as String: NSNumber(value: 256),
             kSecUseKeychain as String: loginKeychain,
-            kSecAttrLabel as String: label,
-            kSecPrivateKeyAttrs as String: privateKeyAttrs,
+            kSecPrivateKeyAttrs as String: [
+                kSecAttrIsPermanent as String: true,
+                kSecAttrIsExtractable as String: true,
+                // Label MUST be inside privateKeyAttrs — this is the "key"
+                // macOS shows in the signing prompt. A top-level
+                // kSecAttrLabel is not a valid key-generation parameter and
+                // is rejected on stricter OS versions.
+                kSecAttrLabel as String: label,
+            ],
         ]
         var error: Unmanaged<CFError>?
         guard let secKey = SecKeyCreateRandomKey(keyAttrs as CFDictionary, &error) else {
@@ -147,9 +138,20 @@ public final class TlsIdentity: Sendable {
     }
 }
 
-public enum TlsIdentityError: Error {
+public enum TlsIdentityError: LocalizedError {
     case keychain(OSStatus)
     case missingCertificate
     case certificateEncoding
     case keyEncoding
+
+    public var errorDescription: String? {
+        switch self {
+        case .keychain:
+            // Plain language: no "keychain", "OSStatus", "certificate",
+            // or "TLS" in what the user sees.
+            return "Couldn't get this Mac ready. Open Keychain Access to make sure your login keychain is unlocked, then restart Air Relay."
+        case .missingCertificate, .certificateEncoding, .keyEncoding:
+            return "Couldn't get this Mac ready. Please restart Air Relay and try again."
+        }
+    }
 }
