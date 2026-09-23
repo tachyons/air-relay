@@ -196,6 +196,19 @@ public final class NotificationMirror: NSObject, UNUserNotificationCenterDelegat
         UNUserNotificationCenter.current().add(request)
     }
 
+    public func showLowBattery(_ status: DeviceStatus) {
+        let content = UNMutableNotificationContent()
+        content.title = "Phone battery low"
+        content.body = "\(status.battery)% — charge soon"
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: "lowBattery",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
+
     public func dismissPairingRequest() {
         UNUserNotificationCenter.current()
             .removeDeliveredNotifications(withIdentifiers: ["pairing"])

@@ -77,6 +77,22 @@ class FrameCodecTest {
     }
 
     @Test
+    fun `focus state wire format matches spec`() {
+        val out = ByteArrayOutputStream()
+        FrameCodec.write(DataOutputStream(out), Frame(FrameType.FOCUS_STATE, """{"dnd":true}""".encodeToByteArray()))
+        assertEquals(0x62, out.toByteArray()[4].toInt() and 0xFF)
+        val decoded = ProtocolJson.decodeFromString<FocusState>(FrameCodec.read(DataInputStream(ByteArrayInputStream(out.toByteArray()))).payload.decodeToString())
+        assertEquals(true, decoded.dnd)
+    }
+
+    @Test
+    fun `ringer action wire format matches spec`() {
+        val out = ByteArrayOutputStream()
+        FrameCodec.write(DataOutputStream(out), Frame(FrameType.RINGER_ACTION, """{"mode":"silent"}""".encodeToByteArray()))
+        assertEquals(0x63, out.toByteArray()[4].toInt() and 0xFF)
+    }
+
+    @Test
     fun `media frames wire format matches spec`() {
         val state = ByteArrayOutputStream()
         FrameCodec.write(DataOutputStream(state), Frame(FrameType.MEDIA_STATE, ByteArray(0)))

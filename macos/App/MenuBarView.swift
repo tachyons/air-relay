@@ -81,6 +81,16 @@ struct MenuBarView: View {
                 }
             }
             Spacer()
+            if engine.isConnected {
+                Button {
+                    engine.setPhoneRinger(mode: "silent")
+                } label: {
+                    Image(systemName: "speaker.slash.fill")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Mute phone")
+            }
             if engine.isConnected, engine.deviceStatus?.networkType == "cellular" {
                 Button {
                     engine.requestHotspot()

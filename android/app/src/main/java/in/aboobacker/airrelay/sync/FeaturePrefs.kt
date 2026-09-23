@@ -26,10 +26,15 @@ class FeaturePrefs(context: Context) {
         get() = prefs.getBoolean(KEY_FILES, true)
         set(value) = prefs.edit { putBoolean(KEY_FILES, value) }
 
+    var focusSync: Boolean
+        get() = prefs.getBoolean(KEY_FOCUS, true)
+        set(value) = prefs.edit { putBoolean(KEY_FOCUS, value) }
+
     companion object {
         private const val KEY_NOTIFICATIONS = "notificationSync"
         private const val KEY_CALLS = "callSync"
         private const val KEY_CLIPBOARD = "clipboardSync"
         private const val KEY_FILES = "fileSharing"
+        private const val KEY_FOCUS = "focusSync"
     }
 }

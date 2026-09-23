@@ -131,6 +131,18 @@ public struct DeviceStatus: Codable, Sendable {
     public var signalLevel: Int?
 }
 
+public struct FocusState: Codable, Sendable {
+    public var dnd: Bool
+}
+
+public struct RingerAction: Codable, Sendable {
+    public var mode: String
+
+    public init(mode: String) {
+        self.mode = mode
+    }
+}
+
 public struct FileMeta: Codable, Sendable {
     public var transferId: String
     public var name: String

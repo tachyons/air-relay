@@ -49,6 +49,20 @@ final class FrameCodecTests: XCTestCase {
         XCTAssertNil(status.signalLevel)
     }
 
+    func testFocusStateWireFormatMatchesSpec() throws {
+        let payload = Data(#"{"dnd":true}"#.utf8)
+        var buffer = FrameCodec.encode(Frame(type: .focusState, payload: payload))
+        XCTAssertEqual(buffer[4], 0x62)
+        let decoded = try XCTUnwrap(try FrameCodec.decode(from: &buffer))
+        XCTAssertEqual(decoded.type, .focusState)
+        let state = try JSONDecoder().decode(FocusState.self, from: decoded.payload)
+        XCTAssertEqual(state.dnd, true)
+    }
+
+    func testRingerActionWireFormatMatchesSpec() {
+        XCTAssertEqual(FrameCodec.encode(Frame(type: .ringerAction, payload: Data(#"{"mode":"silent"}"#.utf8)))[4], 0x63)
+    }
+
     func testMediaFramesWireFormatMatchesSpec() {
         XCTAssertEqual(FrameCodec.encode(Frame(type: .mediaState))[4], 0x80)
         XCTAssertEqual(FrameCodec.encode(Frame(type: .mediaAction))[4], 0x81)

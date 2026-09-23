@@ -57,6 +57,8 @@ All messages after the TLS handshake use length-prefixed frames:
 | 0x53 | VIDEO_FRAME     | binary  | android → mac |
 | 0x60 | DEVICE_STATUS   | JSON    | android → mac |
 | 0x61 | HOTSPOT_OPEN    | empty   | mac → android |
+| 0x62 | FOCUS_STATE     | JSON    | both      |
+| 0x63 | RINGER_ACTION   | JSON    | mac → android |
 | 0x70 | FIND_PHONE      | empty   | mac → android |
 | 0x71 | FIND_PHONE_STOP | empty   | both      |
 | 0x80 | MEDIA_STATE     | JSON    | android → mac |
@@ -155,6 +157,22 @@ is 0–4 (cellular signal bars), present only when `networkType` is
 Empty. Asks the phone to open its hotspot settings screen so the user can
 flip the toggle — Android does not let third-party apps enable the hotspot
 programmatically, so the final tap always happens on the phone.
+
+### FOCUS_STATE
+
+```json
+{ "dnd": true }
+```
+
+Whether Do Not Disturb is active. Sent when either side toggles DND and the feature is enabled. The receiver applies the same DND state locally if permitted.
+
+### RINGER_ACTION
+
+```json
+{ "mode": "normal|vibrate|silent" }
+```
+
+Sets the phone's ringer mode from the Mac. One-way (mac → android).
 
 ### FIND_PHONE / FIND_PHONE_STOP
 

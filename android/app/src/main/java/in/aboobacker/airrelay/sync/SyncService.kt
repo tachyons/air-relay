@@ -57,6 +57,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
     private lateinit var statusReporter: DeviceStatusReporter
     private lateinit var phoneFinder: PhoneFinder
     private lateinit var mediaMonitor: MediaMonitor
+    private lateinit var focusMonitor: FocusMonitor
     lateinit var fileTransfer: FileTransfer
         private set
     private var cameraStreamer: CameraStreamer? = null
@@ -77,6 +78,8 @@ class SyncService : androidx.lifecycle.LifecycleService() {
         phoneFinder = PhoneFinder(this)
         mediaMonitor = MediaMonitor(this)
         mediaMonitor.start()
+        focusMonitor = FocusMonitor(this)
+        focusMonitor.start()
         fileTransfer = FileTransfer(this)
     }
 
@@ -255,6 +258,8 @@ class SyncService : androidx.lifecycle.LifecycleService() {
                 FrameType.CAMERA_START -> handleCameraStart(frame)
                 FrameType.CAMERA_STOP -> handleCameraStop()
                 FrameType.HOTSPOT_OPEN -> handleHotspotOpen()
+                FrameType.FOCUS_STATE -> handleFocusState(frame)
+                FrameType.RINGER_ACTION -> handleRingerAction(frame)
                 FrameType.FIND_PHONE -> phoneFinder.start()
                 FrameType.FIND_PHONE_STOP -> phoneFinder.stop(notifyPeer = false)
                 else -> Log.d(TAG, "Unhandled frame: ${frame.type}")
@@ -368,6 +373,24 @@ class SyncService : androidx.lifecycle.LifecycleService() {
             .onFailure { Log.w(TAG, "Failed to open hotspot settings directly: ${it.message}") }
     }
 
+    private fun handleFocusState(frame: Frame) {
+        val state = ProtocolJson.decodeFromString<`in`.aboobacker.airrelay.protocol.FocusState>(frame.payload.decodeToString())
+        focusMonitor.onRemoteState(state.dnd)
+    }
+
+    private fun handleRingerAction(frame: Frame) {
+        val action = ProtocolJson.decodeFromString<`in`.aboobacker.airrelay.protocol.RingerAction>(frame.payload.decodeToString())
+        val audio = getSystemService(android.media.AudioManager::class.java)
+        val mode = when (action.mode) {
+            "normal" -> android.media.AudioManager.RINGER_MODE_NORMAL
+            "vibrate" -> android.media.AudioManager.RINGER_MODE_VIBRATE
+            "silent" -> android.media.AudioManager.RINGER_MODE_SILENT
+            else -> return
+        }
+        runCatching { audio.ringerMode = mode }
+            .onFailure { Log.w(TAG, "Failed to set ringer: ${it.message}") }
+    }
+
     private fun handleMediaAction(frame: Frame) {
         val action = ProtocolJson.decodeFromString<`in`.aboobacker.airrelay.protocol.MediaAction>(
             frame.payload.decodeToString(),
@@ -470,6 +493,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
         callMonitor.stop()
         statusReporter.stop()
         mediaMonitor.stop()
+        focusMonitor.stop()
         phoneFinder.stop(notifyPeer = false)
         cameraStreamer?.stop()
         keepaliveJob?.cancel()

@@ -93,3 +93,9 @@ data class DeviceStatus(
     val networkType: String? = null,
     val signalLevel: Int? = null,
 )
+
+@Serializable
+data class FocusState(val dnd: Boolean)
+
+@Serializable
+data class RingerAction(val mode: String)

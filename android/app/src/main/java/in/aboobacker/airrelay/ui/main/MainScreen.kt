@@ -285,6 +285,12 @@ private fun SettingsSheet(
         initial = features?.fileSharing ?: true,
         onChange = { features?.fileSharing = it },
       )
+      FeatureToggleRow(
+        title = "Do Not Disturb",
+        subtitle = "Sync Focus between phone and Mac",
+        initial = features?.focusSync ?: true,
+        onChange = { features?.focusSync = it },
+      )
 
       var confirmUnpair by remember { mutableStateOf(false) }
       TextButton(

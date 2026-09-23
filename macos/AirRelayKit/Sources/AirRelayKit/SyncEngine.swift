@@ -80,6 +80,14 @@ public final class SyncEngine: ObservableObject {
         }
     }
 
+    public var focusSyncEnabled: Bool {
+        get { defaults.object(forKey: "feature.focus") as? Bool ?? true }
+        set {
+            defaults.set(newValue, forKey: "feature.focus")
+            objectWillChange.send()
+        }
+    }
+
     public func start() {
         guard listener == nil else { return }
         do {
@@ -286,6 +294,12 @@ public final class SyncEngine: ObservableObject {
         connection?.send(Frame(type: .hotspotOpen))
     }
 
+    public func setPhoneRinger(mode: String) {
+        guard !quarantined else { return }
+        guard ["normal", "vibrate", "silent"].contains(mode) else { return }
+        sendJSON(.ringerAction, RingerAction(mode: mode))
+    }
+
     public func findPhone() {
         guard !quarantined else { return }
         connection?.send(Frame(type: .findPhone))
@@ -393,7 +407,17 @@ public final class SyncEngine: ObservableObject {
                 NSWorkspace.shared.open(url)
             }
         case .deviceStatus:
-            deviceStatus = try? json.decode(DeviceStatus.self, from: frame.payload)
+            if let status = try? json.decode(DeviceStatus.self, from: frame.payload) {
+                deviceStatus = status
+                checkLowBattery(status)
+            }
+        case .focusState:
+            guard focusSyncEnabled else { break }
+            if let state = try? json.decode(FocusState.self, from: frame.payload) {
+                // Best-effort: apply local DND via AppleScript if available, else just log
+                log.info("Remote focus dnd=\(state.dnd)")
+                // TODO: integrate with macOS Focus via Shortcuts / private API when available
+            }
         case .mediaState:
             if let state = try? json.decode(MediaState.self, from: frame.payload) {
                 mediaState = state.title == nil ? nil : state
@@ -435,5 +459,15 @@ public final class SyncEngine: ObservableObject {
 
     private func showUserNotification(_ payload: NotificationPayload) {
         mirror.show(payload)
+    }
+
+    private func checkLowBattery(_ status: DeviceStatus) {
+        guard status.battery < 15, !status.charging else { return }
+        guard notificationSyncEnabled else { return }
+        let last = defaults.double(forKey: "lastLowBatteryNudge")
+        let now = Date().timeIntervalSince1970
+        if now - last < 3600 { return }
+        defaults.set(now, forKey: "lastLowBatteryNudge")
+        mirror.showLowBattery(status)
     }
 }
