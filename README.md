@@ -89,6 +89,39 @@ CMIOExtension requires a paid Apple Developer account
 (`com.apple.developer.system-extension.install` entitlement) and is not yet
 part of the project.
 
+## Installing the Android APK
+
+Download `AirRelay-<version>.apk` from [Releases](../../releases) and open it on
+the phone. Android will warn that the app is from an unknown developer and Play
+Protect may refuse to install it ("App blocked to protect your device") — this
+is the scanner's default for apps it has no reputation for, not a finding about
+this app.
+
+To install anyway: Play Store → profile → Play Protect → gear → turn off
+**Scan apps with Play Protect**, then reopen the APK. If the phone has
+**Advanced Protection** enabled (Settings → Security & privacy), sideloading is
+blocked outright and must be turned off first. The app has no Play listing;
+[its permissions](#permissions) are the full list of what it can ask for.
+
+## Permissions
+
+Everything is peer-to-peer: no account, no server, no analytics. The phone asks
+for nothing it does not use.
+
+| Permission | Used for | When it is asked |
+|---|---|---|
+| `INTERNET`, `ACCESS_NETWORK_STATE` | the encrypted link to your Mac | install |
+| `POST_NOTIFICATIONS` | mirroring notifications and the "connected" indicator | first launch |
+| `FOREGROUND_SERVICE` (+`_CONNECTED_DEVICE`, `_CAMERA`) | keeping the link alive in the background | install |
+| `READ_PHONE_STATE`, `ANSWER_PHONE_CALLS` | showing calls on the Mac, answering/declining them | first launch |
+| `RECEIVE_BOOT_COMPLETED` | reconnecting after a restart | install |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | stopping Android from killing the link overnight | only via the in-app "Keep connection in background" row |
+| `CAMERA` | the phone-camera preview in the Mac menu bar | only when you open that preview |
+
+Caller names come from the dialer's own incoming-call notification — the app
+reads neither your contacts nor your call log, and it declares no storage,
+location, or SMS access.
+
 ## Documentation
 
 - [docs/PROTOCOL.md](docs/PROTOCOL.md) — wire protocol, message schemas, pairing flow

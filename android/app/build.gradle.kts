@@ -6,7 +6,14 @@ plugins {
   alias(libs.plugins.kotlin.serialization)
 }
 
-val appVersion = "0.2.0"
+// Release tags (vX.Y.Z) drive the version; local builds fall back to the default.
+val defaultVersion = "0.2.0"
+val taggedVersion = System.getenv("GITHUB_REF_NAME")
+  ?.removePrefix("v")
+  ?.takeIf { Regex("""\d+\.\d+\.\d+""").matches(it) }
+val appVersion = taggedVersion ?: defaultVersion
+val appVersionCode = appVersion.split(".")
+  .let { (major, minor, patch) -> major.toInt() * 10_000 + minor.toInt() * 100 + patch.toInt() }
 
 android {
     namespace = "in.aboobacker.airrelay"
@@ -15,7 +22,7 @@ android {
         applicationId = "in.aboobacker.airrelay"
         minSdk = 29
         targetSdk = 37
-        versionCode = 2
+        versionCode = appVersionCode
         versionName = appVersion
         buildConfigField("String", "APP_VERSION", "\"$appVersion\"")
     }
