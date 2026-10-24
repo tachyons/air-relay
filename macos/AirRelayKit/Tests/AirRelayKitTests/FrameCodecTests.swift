@@ -111,8 +111,32 @@ final class FrameCodecTests: XCTestCase {
         XCTAssertEqual(url.url, "https://example.com/article")
     }
 
-    func testRejectsUnknownType() {
-        var buffer = Data([0, 0, 0, 1, 0xFF])
+    func testHelloPairingFlagIsOptional() throws {
+        // Older builds don't send `pairing`; it must decode as "not pairing".
+        let legacy = Data(#"{"protocolVersion":1,"deviceName":"Pixel","platform":"android","appVersion":"0.1.0"}"#.utf8)
+        XCTAssertNil(try JSONDecoder().decode(Hello.self, from: legacy).pairing)
+        let requesting = Data(#"{"protocolVersion":1,"deviceName":"Pixel","platform":"android","appVersion":"0.1.0","pairing":true}"#.utf8)
+        XCTAssertEqual(try JSONDecoder().decode(Hello.self, from: requesting).pairing, true)
+    }
+
+    func testSkipsUnknownFrameType() throws {
+        // A newer peer may send frame types we don't know yet: the length
+        // prefix keeps us in sync, so skip it instead of killing the link.
+        var buffer = Data([0, 0, 0, 1, 0xFF]) + Data([0, 0, 0, 1, 0x01])
+        let frame = try FrameCodec.decode(from: &buffer)
+        XCTAssertEqual(frame?.type, .hello)
+        XCTAssertTrue(buffer.isEmpty)
+    }
+
+    func testDecoderSkipsUnknownFrameType() throws {
+        var decoder = FrameDecoder()
+        decoder.append(Data([0, 0, 0, 3, 0xFF, 0xAA, 0xBB]) + Data([0, 0, 0, 1, 0x02]))
+        XCTAssertEqual(try decoder.next()?.type, .ping)
+        XCTAssertNil(try decoder.next())
+    }
+
+    func testRejectsInvalidLength() {
+        var buffer = Data([0xFF, 0xFF, 0xFF, 0xFF])
         XCTAssertThrowsError(try FrameCodec.decode(from: &buffer))
     }
 }

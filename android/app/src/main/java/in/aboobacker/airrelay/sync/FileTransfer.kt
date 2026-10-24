@@ -14,6 +14,7 @@ import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.util.Log
 import `in`.aboobacker.airrelay.R
+import `in`.aboobacker.airrelay.protocol.FileChunk
 import `in`.aboobacker.airrelay.protocol.FileMeta
 import `in`.aboobacker.airrelay.protocol.Frame
 import `in`.aboobacker.airrelay.protocol.FrameType
@@ -120,13 +121,28 @@ class FileTransfer(private val context: Context) {
             Log.i(TAG, "File sharing off; ignoring offer for ${meta.name}")
             return
         }
+        if (meta.size < 0) {
+            Log.w(TAG, "Ignoring offer with invalid size ${meta.size}")
+            return
+        }
+        // The name comes from the peer: keep only the base name so it can't
+        // steer the download anywhere else.
+        val name = safeName(meta.name)
+        if (name == null) {
+            Log.w(TAG, "Ignoring offer with unusable name")
+            return
+        }
+        if (incoming.containsKey(meta.transferId)) {
+            Log.w(TAG, "Duplicate offer ${meta.transferId}; ignoring")
+            return
+        }
         if (meta.size > freeSpaceBytes()) {
-            Log.w(TAG, "Not enough space for ${meta.name} (${meta.size} bytes)")
-            notify("Not enough space", "Free up storage to receive ${meta.name}")
+            Log.w(TAG, "Not enough space for $name (${meta.size} bytes)")
+            notify("Not enough space", "Free up storage to receive $name")
             return
         }
         val values = ContentValues().apply {
-            put(MediaStore.Downloads.DISPLAY_NAME, meta.name)
+            put(MediaStore.Downloads.DISPLAY_NAME, name)
             put(MediaStore.Downloads.MIME_TYPE, meta.mime)
             put(MediaStore.Downloads.RELATIVE_PATH, "Download/AirRelay")
             put(MediaStore.Downloads.IS_PENDING, 1)
@@ -135,39 +151,51 @@ class FileTransfer(private val context: Context) {
         val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
         val stream = uri?.let { resolver.openOutputStream(it) }
         if (uri == null || stream == null) {
-            Log.w(TAG, "Could not create download entry for ${meta.name}")
+            Log.w(TAG, "Could not create download entry for $name")
             return
         }
-        incoming[meta.transferId] = Incoming(meta, stream, uri)
+        incoming[meta.transferId] = Incoming(meta.copy(name = name), stream, uri)
         // Auto-accept: paired peer is trusted.
         SyncService.instance?.send(FrameType.FILE_ACCEPT, frame.payload)
-        Log.i(TAG, "Receiving ${meta.name} -> $uri")
+        Log.i(TAG, "Receiving $name -> $uri")
     }
 
     fun onChunk(frame: Frame) {
-        val buffer = ByteBuffer.wrap(frame.payload)
-        val id = uuidFrom(buffer)
-        buffer.long // offset (sequential writes; used for sanity only)
-        val transfer = incoming[id] ?: return
-        val data = ByteArray(buffer.remaining())
-        buffer.get(data)
-        transfer.stream.write(data)
-        transfer.received += data.size
+        val chunk = FileChunk.parse(frame.payload) ?: return
+        val transfer = incoming[chunk.transferId] ?: return
+        // Sequential offsets only: a gap or duplicate would silently corrupt
+        // the file, so fail this transfer instead of writing it.
+        if (chunk.offset != transfer.received ||
+            transfer.received + chunk.data.size > transfer.meta.size
+        ) {
+            abort(chunk.transferId, "chunk out of order")
+            return
+        }
+        runCatching { transfer.stream.write(chunk.data) }
+            .onFailure {
+                abort(chunk.transferId, "write failed: ${it.message}")
+            }
+            .onSuccess { transfer.received += chunk.data.size }
     }
 
     fun onDone(frame: Frame) {
         val meta = ProtocolJson.decodeFromString<FileMeta>(frame.payload.decodeToString())
-        incoming.remove(meta.transferId)?.let { transfer ->
-            transfer.stream.close()
-            context.contentResolver.update(
-                transfer.uri,
-                ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) },
-                null,
-                null,
-            )
-            Log.i(TAG, "Received ${meta.name} (${transfer.received} bytes)")
-            notifyReceived(transfer)
+        val transfer = incoming.remove(meta.transferId) ?: return
+        runCatching { transfer.stream.close() }
+        if (transfer.received != transfer.meta.size) {
+            Log.w(TAG, "Incomplete ${transfer.meta.name}: ${transfer.received}/${transfer.meta.size} bytes")
+            context.contentResolver.delete(transfer.uri, null, null)
+            notify("Transfer interrupted", "The file didn't arrive completely — send it again")
+            return
         }
+        context.contentResolver.update(
+            transfer.uri,
+            ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) },
+            null,
+            null,
+        )
+        Log.i(TAG, "Received ${transfer.meta.name} (${transfer.received} bytes)")
+        notifyReceived(transfer)
     }
 
     /** Aborts in-flight transfers and removes partial downloads. */
@@ -182,6 +210,15 @@ class FileTransfer(private val context: Context) {
         }
         incoming.clear()
         pendingOutgoing.clear()
+    }
+
+    /** Drops one in-flight download without touching the others. */
+    private fun abort(transferId: String, reason: String) {
+        val transfer = incoming.remove(transferId) ?: return
+        runCatching { transfer.stream.close() }
+        runCatching { context.contentResolver.delete(transfer.uri, null, null) }
+        Log.w(TAG, "Aborted ${transfer.meta.name}: $reason")
+        notify("Transfer interrupted", "${transfer.meta.name} didn't arrive completely — send it again")
     }
 
     private fun freeSpaceBytes(): Long = runCatching {
@@ -230,7 +267,10 @@ class FileTransfer(private val context: Context) {
                 .array()
         }
 
-        fun uuidFrom(buffer: ByteBuffer): String =
-            UUID(buffer.long, buffer.long).toString()
+        /** Base name only: a `../` prefix from the peer must never escape Downloads. */
+        fun safeName(raw: String): String? {
+            val name = raw.substringAfterLast('/').substringAfterLast('\\').trim('\u0000', ' ')
+            return name.takeIf { it.isNotEmpty() && it != "." && it != ".." }
+        }
     }
 }

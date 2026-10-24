@@ -42,7 +42,6 @@ public struct Frame: Sendable, Equatable {
 
 public enum FrameCodecError: Error {
     case invalidLength(Int)
-    case unknownType(UInt8)
 }
 
 public enum FrameCodec {
@@ -59,22 +58,27 @@ public enum FrameCodec {
 
     /// Attempts to decode a single frame from the front of `buffer`.
     /// Returns nil if more bytes are needed; consumes decoded bytes on success.
+    ///
+    /// Unknown frame types (a peer running a newer protocol) are dropped
+    /// rather than thrown on: the length prefix keeps the stream in sync, so a
+    /// type we don't understand must not kill an otherwise healthy link.
     public static func decode(from buffer: inout Data) throws -> Frame? {
-        guard buffer.count >= 4 else { return nil }
-        let length = buffer.prefix(4).reduce(0) { ($0 << 8) | Int($1) }
-        guard length >= 1, length <= maxFrameSize else {
-            throw FrameCodecError.invalidLength(length)
+        while true {
+            guard buffer.count >= 4 else { return nil }
+            let length = buffer.prefix(4).reduce(0) { ($0 << 8) | Int($1) }
+            guard length >= 1, length <= maxFrameSize else {
+                throw FrameCodecError.invalidLength(length)
+            }
+            guard buffer.count >= 4 + length else { return nil }
+            let typeByte = buffer[buffer.index(buffer.startIndex, offsetBy: 4)]
+            let payloadStart = buffer.index(buffer.startIndex, offsetBy: 5)
+            let payloadEnd = buffer.index(buffer.startIndex, offsetBy: 4 + length)
+            let payload = Data(buffer[payloadStart..<payloadEnd])
+            buffer.removeFirst(4 + length)
+            if let type = FrameType(rawValue: typeByte) {
+                return Frame(type: type, payload: payload)
+            }
         }
-        guard buffer.count >= 4 + length else { return nil }
-        let typeByte = buffer[buffer.index(buffer.startIndex, offsetBy: 4)]
-        guard let type = FrameType(rawValue: typeByte) else {
-            throw FrameCodecError.unknownType(typeByte)
-        }
-        let payloadStart = buffer.index(buffer.startIndex, offsetBy: 5)
-        let payloadEnd = buffer.index(buffer.startIndex, offsetBy: 4 + length)
-        let payload = Data(buffer[payloadStart..<payloadEnd])
-        buffer.removeFirst(4 + length)
-        return Frame(type: type, payload: payload)
     }
 }
 
@@ -92,23 +96,25 @@ public struct FrameDecoder: Sendable {
     }
 
     public mutating func next() throws -> Frame? {
-        let available = buffer.count - offset
-        guard available >= 4 else { compactIfNeeded(); return nil }
-        let base = buffer.startIndex + offset
-        let length = (Int(buffer[base]) << 24) | (Int(buffer[base + 1]) << 16)
-            | (Int(buffer[base + 2]) << 8) | Int(buffer[base + 3])
-        guard length >= 1, length <= FrameCodec.maxFrameSize else {
-            throw FrameCodecError.invalidLength(length)
+        while true {
+            let available = buffer.count - offset
+            guard available >= 4 else { compactIfNeeded(); return nil }
+            let base = buffer.startIndex + offset
+            let length = (Int(buffer[base]) << 24) | (Int(buffer[base + 1]) << 16)
+                | (Int(buffer[base + 2]) << 8) | Int(buffer[base + 3])
+            guard length >= 1, length <= FrameCodec.maxFrameSize else {
+                throw FrameCodecError.invalidLength(length)
+            }
+            guard available >= 4 + length else { compactIfNeeded(); return nil }
+            let typeByte = buffer[base + 4]
+            let payload = Data(buffer[(base + 5)..<(base + 4 + length)])
+            offset += 4 + length
+            compactIfNeeded()
+            // Unknown frame type from a newer peer: skip it and keep reading.
+            if let type = FrameType(rawValue: typeByte) {
+                return Frame(type: type, payload: payload)
+            }
         }
-        guard available >= 4 + length else { compactIfNeeded(); return nil }
-        let typeByte = buffer[base + 4]
-        guard let type = FrameType(rawValue: typeByte) else {
-            throw FrameCodecError.unknownType(typeByte)
-        }
-        let payload = Data(buffer[(base + 5)..<(base + 4 + length)])
-        offset += 4 + length
-        compactIfNeeded()
-        return Frame(type: type, payload: payload)
     }
 
     private mutating func compactIfNeeded() {

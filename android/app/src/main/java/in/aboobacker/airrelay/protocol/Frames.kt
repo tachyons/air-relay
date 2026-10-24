@@ -56,13 +56,21 @@ object FrameCodec {
         out.flush()
     }
 
+    /**
+     * Reads the next frame we understand. Frame types added by a newer peer
+     * are skipped: the length prefix keeps the stream in sync, so a type we
+     * don't know must not drop an otherwise healthy connection. Structural
+     * faults (bad length, truncated stream) still throw.
+     */
     fun read(input: DataInputStream): Frame {
-        val length = input.readInt()
-        if (length < 1 || length > MAX_FRAME_SIZE) throw IOException("Invalid frame length: $length")
-        val typeCode = input.readUnsignedByte()
-        val type = FrameType.from(typeCode) ?: throw IOException("Unknown frame type: $typeCode")
-        val payload = ByteArray(length - 1)
-        input.readFully(payload)
-        return Frame(type, payload)
+        while (true) {
+            val length = input.readInt()
+            if (length < 1 || length > MAX_FRAME_SIZE) throw IOException("Invalid frame length: $length")
+            val typeCode = input.readUnsignedByte()
+            val payload = ByteArray(length - 1)
+            input.readFully(payload)
+            val type = FrameType.from(typeCode) ?: continue
+            return Frame(type, payload)
+        }
     }
 }

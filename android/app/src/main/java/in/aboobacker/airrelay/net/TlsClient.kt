@@ -13,6 +13,16 @@ import javax.net.ssl.SSLSocket
 import javax.net.ssl.X509TrustManager
 
 /**
+ * Thrown when the Mac presents a certificate that doesn't match the pinned
+ * fingerprint: its identity was reset, so only pairing again can reconnect.
+ */
+class PinnedPeerMismatch(message: String) : CertificateException(message)
+
+/** True when a failure (possibly wrapped by the TLS stack) is a pin mismatch. */
+fun Throwable.isPinnedPeerMismatch(): Boolean =
+    generateSequence(this) { it.cause }.any { it is PinnedPeerMismatch }
+
+/**
  * mTLS 1.3 connection to the macOS peer. Trust is a pinned SHA-256 certificate
  * fingerprint captured during pairing; no CA validation is performed.
  *
@@ -68,7 +78,7 @@ class TlsClient(
                 when {
                     pinnedFingerprint != null -> {
                         if (fp != pinnedFingerprint) {
-                            throw CertificateException("Peer certificate does not match pinned fingerprint")
+                            throw PinnedPeerMismatch("Peer certificate does not match pinned fingerprint")
                         }
                     }
                     pairingMode -> Unit

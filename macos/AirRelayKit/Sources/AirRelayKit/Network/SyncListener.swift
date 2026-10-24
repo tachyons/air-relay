@@ -56,6 +56,11 @@ public final class SyncListener: @unchecked Sendable {
 
     public var onConnection: (@Sendable (SyncConnection, _ peerFingerprint: String) -> Void)?
 
+    /// Fired when a peer presents a certificate that doesn't match the pin —
+    /// i.e. its pairing record was reset and it can only reconnect by pairing
+    /// again. Called on the listener queue.
+    public var onPeerMismatch: (@Sendable () -> Void)?
+
     public init(tlsIdentity: TlsIdentity) {
         self.tlsIdentity = tlsIdentity
     }
@@ -84,28 +89,31 @@ public final class SyncListener: @unchecked Sendable {
                 }
                 let der = SecCertificateCopyData(leaf) as Data
                 let fp = SHA256.hash(data: der).map { String(format: "%02x", $0) }.joined()
-                let allowed = self.state.withLock { state -> Bool in
+                let outcome = self.state.withLock { state -> (allowed: Bool, mismatch: Bool) in
                     if let pinned = state.pinnedPeerFingerprint {
-                        guard fp == pinned else { return false }
+                        guard fp == pinned else { return (false, true) }
                         state.lastPeerCertificate = der
-                        return true
+                        return (true, false)
                     }
                     if state.pairingMode {
                         let cutoff = Date().addingTimeInterval(-60)
                         state.pairingAttempts.removeAll { $0 < cutoff }
                         guard state.pairingAttempts.count < Self.pairingRateLimit else {
-                            return false
+                            return (false, false)
                         }
                         state.pairingAttempts.append(Date())
                         state.lastPeerCertificate = der
-                        return true
+                        return (true, false)
                     }
-                    return false
+                    return (false, false)
                 }
-                if !allowed {
+                if !outcome.allowed {
                     self.log.warning("Rejected TLS peer \(fp.prefix(16))…")
+                    if outcome.mismatch {
+                        self.onPeerMismatch?()
+                    }
                 }
-                complete(allowed)
+                complete(outcome.allowed)
             },
             queue
         )

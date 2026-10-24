@@ -32,6 +32,12 @@ All messages after the TLS handshake use length-prefixed frames:
 
 `length` covers `type + payload`. Max frame size: 16 MiB (larger transfers are chunked).
 
+A frame type this build doesn't know is **skipped**, not fatal: the length
+prefix keeps the stream in sync, so a peer running a newer protocol never
+drops an otherwise healthy link. Structural faults (length < 1, length above
+the max, truncated stream) close the connection. A payload that fails to
+decode is dropped for that frame only; it never takes the link down.
+
 ### Frame types
 
 | Type | Name            | Payload | Direction |
@@ -70,8 +76,21 @@ All JSON is UTF-8, camelCase keys.
 
 ### HELLO
 ```json
-{ "protocolVersion": 1, "deviceName": "Pixel 9", "platform": "android", "appVersion": "0.1.0" }
+{ "protocolVersion": 1, "deviceName": "Pixel 9", "platform": "android", "appVersion": "0.1.0", "pairing": false }
 ```
+
+Both sides send HELLO immediately after the handshake. `protocolVersion` is
+the wire version this build speaks. A peer with a different version is not
+tolerated: the connection is closed and the user is told which device needs
+updating, rather than letting the link half-work.
+
+`pairing` (optional, default `false`) is true while the sender is waiting for
+the user to confirm a pairing code. HELLO is the one frame that may be sent
+before the link is trusted, so an unverified peer learns that a confirmation
+is pending and shows the same code. A paired device that receives
+`"pairing": true` treats the stored pairing as reset, forgets it, and pairs
+again — this is the recovery path after either side's certificate is
+regenerated (app reinstall, keystore/keychain reset).
 
 ### NOTIFICATION
 ```json
@@ -134,6 +153,13 @@ Mac) or on earbuds paired to the phone.
 { "transferId": "uuid", "name": "photo.jpg", "size": 123456, "mime": "image/jpeg" }
 ```
 FILE_CHUNK binary payload: `transferId (16 bytes uuid) || offset (u64 BE) || data`.
+
+Offsets start at 0 and are strictly sequential; the receiver aborts the
+transfer (and deletes the partial file) if a chunk arrives out of order,
+duplicates data, or would exceed the offered `size`. FILE_DONE must arrive
+with exactly `size` bytes written, otherwise the transfer is discarded rather
+than published as a truncated file. `name` is reduced to its base name on the
+receiving side so a peer can never write outside the downloads folder.
 
 ### CAMERA_START
 ```json

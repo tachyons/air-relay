@@ -30,9 +30,13 @@ public final class SyncEngine: ObservableObject {
     @Published public private(set) var lastError: String?
     @Published public private(set) var pendingPairing: PendingPairing?
     @Published public private(set) var isFindingPhone = false
+    /// The stored pairing no longer matches the peer (its key was reset), so
+    /// the only way forward is pairing again.
+    @Published public private(set) var pairingNeedsRepair = false
 
     private var listener: SyncListener?
     private var connection: SyncConnection?
+    private var currentPeerFingerprint: String?
     private var quarantined = false
     private var pathMonitor: NWPathMonitor?
     private var identity: TlsIdentity?
@@ -101,6 +105,9 @@ public final class SyncEngine: ObservableObject {
             isPaired = pinned != nil
             listener.onConnection = { [weak self] connection, fingerprint in
                 Task { @MainActor in self?.attach(connection, peerFingerprint: fingerprint) }
+            }
+            listener.onPeerMismatch = { [weak self] in
+                Task { @MainActor in self?.notePeerMismatch() }
             }
             try listener.start(deviceName: Host.current().localizedName ?? "Mac")
             self.listener = listener
@@ -232,10 +239,19 @@ public final class SyncEngine: ObservableObject {
         listener?.pinnedPeerFingerprint = pending.fingerprint
         listener?.pairingMode = false
         pendingPairing = nil
+        pairingNeedsRepair = false
         mirror.dismissPairingRequest()
         isPaired = true
         quarantined = false
         sendHello()
+    }
+
+    /// Forgets the stored pairing and re-enters pairing mode. The phone shows
+    /// the same code on its next connection, so the user confirms on both
+    /// devices — this is the recovery path after either side's key was reset.
+    public func repairPairing() {
+        lastError = nil
+        unpair()
     }
 
     public func rejectPairing() {
@@ -251,6 +267,7 @@ public final class SyncEngine: ObservableObject {
         defaults.removeObject(forKey: "peerFingerprint")
         listener?.pinnedPeerFingerprint = nil
         listener?.pairingMode = true
+        pairingNeedsRepair = false
         isPaired = false
         connection?.close()
     }
@@ -317,6 +334,7 @@ public final class SyncEngine: ObservableObject {
         deviceStatus = nil
         isFindingPhone = false
         self.connection = connection
+        currentPeerFingerprint = peerFingerprint
         previous?.onClose = nil
         previous?.close()
         connection.onFrame = { [weak self, weak connection] frame in
@@ -353,8 +371,41 @@ public final class SyncEngine: ObservableObject {
                 sasCode: Self.sasCode(peerCertificate: peerDER, localCertificate: listener.localCertificate)
             )
             pendingPairing = pending
+            // Announce that we're pairing so the phone shows the same code even
+            // if it still believes it is paired (e.g. after our key was reset).
+            sendHello(pairing: true)
             mirror.showPairingRequest(sasCode: pending.sasCode)
         }
+    }
+
+    /// The peer's certificate no longer matches the pin. Nothing can be sent or
+    /// received until the user pairs again; say so instead of retrying silently.
+    private func notePeerMismatch() {
+        guard isPaired, !pairingNeedsRepair else { return }
+        log.warning("Peer certificate no longer matches the pin")
+        pairingNeedsRepair = true
+    }
+
+    /// The phone lost its pairing record and is asking to pair again. Show the
+    /// same code it is showing; confirming re-pins the peer.
+    private func beginRepairPairing(peerName: String) {
+        guard let listener,
+              let peerDER = listener.lastPeerCertificate,
+              let fingerprint = currentPeerFingerprint
+        else {
+            connection?.close()
+            return
+        }
+        log.info("Peer \(peerName) asked to pair again")
+        pairingNeedsRepair = false
+        lastError = nil
+        quarantined = true
+        let pending = PendingPairing(
+            fingerprint: fingerprint,
+            sasCode: Self.sasCode(peerCertificate: peerDER, localCertificate: listener.localCertificate)
+        )
+        pendingPairing = pending
+        mirror.showPairingRequest(sasCode: pending.sasCode)
     }
 
     /// Matches the Android derivation: sha256(macCert || androidCert), first
@@ -373,9 +424,24 @@ public final class SyncEngine: ObservableObject {
         guard !quarantined else { return }
         switch frame.type {
         case .hello:
-            if let hello = try? json.decode(Hello.self, from: frame.payload) {
-                peerName = hello.deviceName
+            guard let hello = try? json.decode(Hello.self, from: frame.payload) else { return }
+            peerName = hello.deviceName
+            guard hello.protocolVersion == Hello.currentProtocolVersion else {
+                // Refuse to half-work with a peer we can't understand, and say
+                // which side needs updating instead of silently misbehaving.
+                log.error("Peer protocol v\(hello.protocolVersion) unsupported")
+                lastError = hello.protocolVersion > Hello.currentProtocolVersion
+                    ? "Update Air Relay on this Mac to connect to \(hello.deviceName)."
+                    : "Update Air Relay on \(hello.deviceName) to reconnect."
+                quarantined = true
+                connection?.close()
+                return
             }
+            if hello.pairing == true, isPaired {
+                beginRepairPairing(peerName: hello.deviceName)
+                return
+            }
+            lastError = nil
         case .notification:
             guard notificationSyncEnabled else { return }
             if let payload = try? json.decode(NotificationPayload.self, from: frame.payload) {
@@ -407,7 +473,8 @@ public final class SyncEngine: ObservableObject {
                 NSWorkspace.shared.open(url)
             }
         case .deviceStatus:
-            if let status = try? json.decode(DeviceStatus.self, from: frame.payload) {
+            if let status = try? json.decode(DeviceStatus.self, from: frame.payload),
+               (0...100).contains(status.battery) {
                 deviceStatus = status
                 checkLowBattery(status)
             }
@@ -441,10 +508,17 @@ public final class SyncEngine: ObservableObject {
         }
     }
 
-    private func sendHello() {
+    private func sendHello(pairing: Bool = false) {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
-        let hello = Hello(deviceName: Host.current().localizedName ?? "Mac", appVersion: version)
-        sendJSON(.hello, hello)
+        let hello = Hello(
+            deviceName: Host.current().localizedName ?? "Mac",
+            appVersion: version,
+            pairing: pairing
+        )
+        guard let data = try? JSONEncoder().encode(hello) else { return }
+        // Bypasses the quarantine guard on purpose: HELLO is how an unverified
+        // peer learns that a pairing confirmation is waiting for it.
+        connection?.send(Frame(type: .hello, payload: data))
     }
 
     private func sendClipboard(_ text: String) {

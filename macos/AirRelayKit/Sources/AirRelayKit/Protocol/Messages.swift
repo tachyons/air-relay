@@ -1,16 +1,25 @@
 import Foundation
 
 public struct Hello: Codable, Sendable {
+    /// Wire protocol this build speaks. Bump together with docs/PROTOCOL.md;
+    /// a mismatch is surfaced to the user instead of half-working.
+    public static let currentProtocolVersion = 1
+
     public var protocolVersion: Int
     public var deviceName: String
     public var platform: String
     public var appVersion: String
+    /// True while the sender is waiting for a pairing confirmation. Lets the
+    /// other side show the same code instead of sitting connected and ignored.
+    /// Optional so a HELLO from an older build (no key) still decodes.
+    public var pairing: Bool?
 
-    public init(deviceName: String, appVersion: String) {
-        self.protocolVersion = 1
+    public init(deviceName: String, appVersion: String, pairing: Bool = false) {
+        self.protocolVersion = Self.currentProtocolVersion
         self.deviceName = deviceName
         self.platform = "macos"
         self.appVersion = appVersion
+        self.pairing = pairing
     }
 }
 

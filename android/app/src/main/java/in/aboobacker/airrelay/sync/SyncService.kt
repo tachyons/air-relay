@@ -15,11 +15,13 @@ import `in`.aboobacker.airrelay.net.DeviceIdentity
 import `in`.aboobacker.airrelay.net.DiscoveryManager
 import `in`.aboobacker.airrelay.net.PairingStore
 import `in`.aboobacker.airrelay.net.TlsClient
+import `in`.aboobacker.airrelay.net.isPinnedPeerMismatch
 import `in`.aboobacker.airrelay.protocol.ClipboardText
 import `in`.aboobacker.airrelay.protocol.Frame
 import `in`.aboobacker.airrelay.protocol.FrameType
 import `in`.aboobacker.airrelay.protocol.Hello
 import `in`.aboobacker.airrelay.protocol.NotificationReply
+import `in`.aboobacker.airrelay.protocol.PROTOCOL_VERSION
 import `in`.aboobacker.airrelay.protocol.ProtocolJson
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +37,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import java.net.SocketTimeoutException
+import javax.net.ssl.SSLException
 import kotlin.math.min
 import kotlin.random.Random
 
@@ -46,6 +49,8 @@ import kotlin.random.Random
 class SyncService : androidx.lifecycle.LifecycleService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** Single-slot dispatcher: frames must hit the wire in the order they were queued. */
+    private val sendDispatcher = Dispatchers.IO.limitedParallelism(1)
     private lateinit var identity: DeviceIdentity
     private lateinit var pairing: PairingStore
     private lateinit var discovery: DiscoveryManager
@@ -106,6 +111,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
     private suspend fun connectionLoop() {
         var attempt = 0
         while (scope.isActive) {
+            var failedClient: TlsClient? = null
             try {
                 val peer = discovery.discoverPeers().first()
                 Log.i(TAG, "Found peer ${peer.name} at ${peer.host}:${peer.port}")
@@ -115,14 +121,24 @@ class SyncService : androidx.lifecycle.LifecycleService() {
                     delay(5_000)
                     continue
                 }
+                if (_connectionState.value is ConnectionState.UpdateRequired) {
+                    // Nothing this build can do until one side is updated; probe
+                    // occasionally instead of reconnecting in a tight loop.
+                    delay(60_000)
+                    continue
+                }
                 val tls = TlsClient(
                     identity = identity,
                     pinnedFingerprint = pairing.peerFingerprint,
                     pairingMode = !paired,
                 )
+                failedClient = tls
                 tls.connect(peer.host, peer.port)
                 client = tls
                 if (!paired) {
+                    // Tell the Mac a confirmation is coming so it can show the
+                    // same code even if it still believes we are paired.
+                    sendHello(pairing = true)
                     if (!confirmPairing(tls, peer.name)) {
                         tls.close()
                         continue
@@ -138,7 +154,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
                 drainPendingShares()
                 readLoop(tls)
             } catch (e: Exception) {
-                Log.w(TAG, "Connection failed: ${e.message}")
+                handleConnectionFailure(e, failedClient)
             } finally {
                 statusReporter.stop()
                 fileTransfer.reset()
@@ -146,10 +162,17 @@ class SyncService : androidx.lifecycle.LifecycleService() {
                 client?.close()
                 client = null
                 val state = _connectionState.value
-                if (state !is ConnectionState.Pairing && state !is ConnectionState.PairingDeclined) {
-                    _connectionState.value = ConnectionState.Disconnected
+                val keepState = state is ConnectionState.Pairing ||
+                    state is ConnectionState.PairingDeclined ||
+                    state is ConnectionState.UpdateRequired ||
+                    state is ConnectionState.PairingChanged
+                if (!keepState) _connectionState.value = ConnectionState.Disconnected
+                val message = when (state) {
+                    is ConnectionState.UpdateRequired -> state.message
+                    is ConnectionState.PairingChanged -> state.message
+                    else -> "Waiting for your Mac…"
                 }
-                updateNotification("Waiting for your Mac…")
+                updateNotification(message)
             }
             val delayMs = min(60_000L, 1000L * (1L shl min(attempt, 6))) + Random.nextLong(500)
             attempt++
@@ -226,10 +249,38 @@ class SyncService : androidx.lifecycle.LifecycleService() {
         }
     }
 
-    private fun sendHello() {
+    /**
+     * Classifies a failed connection attempt. A pin mismatch — or our pin
+     * matching while the Mac still refuses our certificate — means the stored
+     * pairing is stale, so the user is offered a fresh pairing instead of an
+     * endless silent retry.
+     */
+    private fun handleConnectionFailure(e: Exception, tls: TlsClient?) {
+        val name = pairing.peerName ?: "your Mac"
+        val peerFingerprint = tls?.peerFingerprint
+        // Only report a stale pairing while we still hold one: a user who just
+        // tapped "Pair again" must not see the old failure resurface.
+        val refused = pairing.isPaired &&
+            (e.isPinnedPeerMismatch() ||
+                (peerFingerprint != null &&
+                    peerFingerprint == pairing.peerFingerprint &&
+                    e is SSLException))
+        if (refused) {
+            Log.w(TAG, "Stored pairing is stale: ${e.message}")
+            _connectionState.value = ConnectionState.PairingChanged(
+                peerName = name,
+                message = "Pairing with $name expired. Confirm the code on both devices to reconnect.",
+            )
+        } else {
+            Log.w(TAG, "Connection failed: ${e.message}")
+        }
+    }
+
+    private fun sendHello(pairing: Boolean = false) {
         val hello = Hello(
             deviceName = Build.MODEL,
             appVersion = `in`.aboobacker.airrelay.BuildConfig.APP_VERSION,
+            pairing = pairing,
         )
         send(FrameType.HELLO, ProtocolJson.encodeToString(hello).encodeToByteArray())
     }
@@ -241,30 +292,73 @@ class SyncService : androidx.lifecycle.LifecycleService() {
             } catch (e: SocketTimeoutException) {
                 continue
             }
-            when (frame.type) {
-                FrameType.PING -> send(FrameType.PONG, ByteArray(0))
-                FrameType.PONG -> awaitingPongs = 0
-                FrameType.CLIPBOARD_TEXT -> handleRemoteClipboard(frame)
-                FrameType.OPEN_URL -> handleOpenUrl(frame)
-                FrameType.NOTIF_REPLY -> if (features.notificationSync) handleNotifReply(frame)
-                FrameType.NOTIF_ACTION -> if (features.notificationSync) handleNotifAction(frame)
-                FrameType.NOTIF_DISMISS -> if (features.notificationSync) NotificationRelayService.dismiss(frame)
-                FrameType.CALL_ACTION -> handleCallAction(frame)
-                FrameType.MEDIA_ACTION -> handleMediaAction(frame)
-                FrameType.FILE_OFFER -> fileTransfer.onOffer(frame)
-                FrameType.FILE_ACCEPT -> fileTransfer.onAccept(frame, scope)
-                FrameType.FILE_CHUNK -> fileTransfer.onChunk(frame)
-                FrameType.FILE_DONE -> fileTransfer.onDone(frame)
-                FrameType.CAMERA_START -> handleCameraStart(frame)
-                FrameType.CAMERA_STOP -> handleCameraStop()
-                FrameType.HOTSPOT_OPEN -> handleHotspotOpen()
-                FrameType.FOCUS_STATE -> handleFocusState(frame)
-                FrameType.RINGER_ACTION -> handleRingerAction(frame)
-                FrameType.FIND_PHONE -> phoneFinder.start()
-                FrameType.FIND_PHONE_STOP -> phoneFinder.stop(notifyPeer = false)
-                else -> Log.d(TAG, "Unhandled frame: ${frame.type}")
-            }
+            // One malformed payload must not drop the link: log it, drop the
+            // frame, keep reading. Framing faults still surface from receive().
+            runCatching { dispatch(frame) }
+                .onFailure { Log.w(TAG, "Dropping ${frame.type}: ${it.message}") }
         }
+    }
+
+    private fun dispatch(frame: Frame) {
+        when (frame.type) {
+            FrameType.HELLO -> handleHello(frame)
+            FrameType.PING -> send(FrameType.PONG, ByteArray(0))
+            FrameType.PONG -> awaitingPongs = 0
+            FrameType.CLIPBOARD_TEXT -> handleRemoteClipboard(frame)
+            FrameType.OPEN_URL -> handleOpenUrl(frame)
+            FrameType.NOTIF_REPLY -> if (features.notificationSync) handleNotifReply(frame)
+            FrameType.NOTIF_ACTION -> if (features.notificationSync) handleNotifAction(frame)
+            FrameType.NOTIF_DISMISS -> if (features.notificationSync) NotificationRelayService.dismiss(frame)
+            FrameType.CALL_ACTION -> handleCallAction(frame)
+            FrameType.MEDIA_ACTION -> handleMediaAction(frame)
+            FrameType.FILE_OFFER -> fileTransfer.onOffer(frame)
+            FrameType.FILE_ACCEPT -> fileTransfer.onAccept(frame, scope)
+            FrameType.FILE_CHUNK -> fileTransfer.onChunk(frame)
+            FrameType.FILE_DONE -> fileTransfer.onDone(frame)
+            FrameType.CAMERA_START -> handleCameraStart(frame)
+            FrameType.CAMERA_STOP -> handleCameraStop()
+            FrameType.HOTSPOT_OPEN -> handleHotspotOpen()
+            FrameType.FOCUS_STATE -> handleFocusState(frame)
+            FrameType.RINGER_ACTION -> handleRingerAction(frame)
+            FrameType.FIND_PHONE -> phoneFinder.start()
+            FrameType.FIND_PHONE_STOP -> phoneFinder.stop(notifyPeer = false)
+            else -> Log.d(TAG, "Unhandled frame: ${frame.type}")
+        }
+    }
+
+    /**
+     * Refuses to run with a peer that speaks a different protocol version and
+     * tells the user which device needs updating, rather than letting the link
+     * half-work or reconnecting in a silent loop.
+     */
+    private fun handleHello(frame: Frame) {
+        val hello = ProtocolJson.decodeFromString<Hello>(frame.payload.decodeToString())
+        if (hello.protocolVersion != PROTOCOL_VERSION) {
+            Log.w(TAG, "Peer speaks protocol v${hello.protocolVersion}, this build v$PROTOCOL_VERSION")
+            val message = if (hello.protocolVersion > PROTOCOL_VERSION) {
+                "Update Air Relay on this phone to connect to ${hello.deviceName}."
+            } else {
+                "Update Air Relay on ${hello.deviceName} to reconnect."
+            }
+            _connectionState.value = ConnectionState.UpdateRequired(hello.deviceName, message)
+            client?.close()
+            return
+        }
+        if (hello.pairing && pairing.isPaired) {
+            // The Mac is pairing again (its key was reset): drop our copy of
+            // the pairing and go through the code comparison instead of
+            // sitting connected while it ignores us.
+            Log.i(TAG, "Mac asked to pair again")
+            forgetPairing()
+            client?.close()
+        }
+    }
+
+    /** Forgets the stored pairing so the next connection starts a fresh pairing. */
+    fun forgetPairing() {
+        pairing.clear()
+        ShortcutPublisher.removeShareTarget(this)
+        _connectionState.value = ConnectionState.Disconnected
     }
 
     private fun handleRemoteClipboard(frame: Frame) {
@@ -430,7 +524,7 @@ class SyncService : androidx.lifecycle.LifecycleService() {
 
     fun send(type: FrameType, payload: ByteArray) {
         val tls = client ?: return
-        scope.launch {
+        scope.launch(sendDispatcher) {
             runCatching { tls.send(Frame(type, payload)) }
                 .onFailure { Log.w(TAG, "Send failed: ${it.message}") }
         }
@@ -507,6 +601,8 @@ class SyncService : androidx.lifecycle.LifecycleService() {
         data object Disconnected : ConnectionState
         data class Pairing(val peerName: String, val sasCode: String) : ConnectionState
         data class PairingDeclined(val peerName: String) : ConnectionState
+        data class UpdateRequired(val peerName: String, val message: String) : ConnectionState
+        data class PairingChanged(val peerName: String, val message: String) : ConnectionState
         data class Connected(val peerName: String) : ConnectionState
     }
 

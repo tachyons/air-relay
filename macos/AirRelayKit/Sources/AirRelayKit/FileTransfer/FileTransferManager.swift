@@ -85,6 +85,11 @@ public final class FileTransferManager: ObservableObject {
         guard let meta = try? JSONDecoder().decode(FileMeta.self, from: payload),
               let url = pendingOutgoing.removeValue(forKey: meta.transferId)
         else { return }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            finish(id: meta.transferId)
+            onTransferFailed?(meta.name)
+            return
+        }
         Task.detached(priority: .utility) { [weak self] in
             await self?.stream(meta: meta, from: url)
         }
@@ -119,7 +124,15 @@ public final class FileTransferManager: ObservableObject {
 
     public func handleOffer(_ payload: Data) {
         guard isEnabled else { return }
-        guard let meta = try? JSONDecoder().decode(FileMeta.self, from: payload) else { return }
+        guard var meta = try? JSONDecoder().decode(FileMeta.self, from: payload),
+              meta.size >= 0,
+              let name = Self.safeName(meta.name)
+        else { return }
+        guard incoming[meta.transferId] == nil else {
+            log.warning("Duplicate offer \(meta.transferId); ignoring")
+            return
+        }
+        meta.name = name
         let dir = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("AirRelay", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -136,16 +149,26 @@ public final class FileTransferManager: ObservableObject {
     }
 
     public func handleChunk(_ payload: Data) {
-        guard payload.count > 24 else { return }
-        let idBytes = payload.prefix(16)
-        guard let id = Self.uuidString(from: Data(idBytes)),
-              var transfer = incoming[id]
+        guard let chunk = Self.parseChunk(payload),
+              var transfer = incoming[chunk.id]
         else { return }
-        let chunk = payload.dropFirst(24)
-        try? transfer.handle.write(contentsOf: chunk)
-        transfer.received += Int64(chunk.count)
-        incoming[id] = transfer
-        updateProgress(id: id, transferred: transfer.received)
+        // Sequential offsets only: a gap or duplicate means the file would be
+        // silently corrupt, so fail the transfer instead of writing it.
+        guard chunk.offset == transfer.received,
+              transfer.received + Int64(chunk.data.count) <= transfer.meta.size
+        else {
+            abort(id: chunk.id, reason: "chunk out of order")
+            return
+        }
+        do {
+            try transfer.handle.write(contentsOf: chunk.data)
+        } catch {
+            abort(id: chunk.id, reason: "write failed: \(error.localizedDescription)")
+            return
+        }
+        transfer.received += Int64(chunk.data.count)
+        incoming[chunk.id] = transfer
+        updateProgress(id: chunk.id, transferred: transfer.received)
     }
 
     public func handleDone(_ payload: Data) {
@@ -154,9 +177,15 @@ public final class FileTransferManager: ObservableObject {
         else { return }
         try? transfer.handle.close()
         finish(id: meta.transferId)
-        recordRecent(id: meta.transferId, name: meta.name, url: transfer.url, inbound: true)
-        onTransferComplete?(meta.name, true)
-        log.info("Received \(meta.name) (\(transfer.received) bytes)")
+        guard transfer.received == transfer.meta.size else {
+            log.warning("Incomplete \(transfer.meta.name): \(transfer.received)/\(transfer.meta.size) bytes")
+            try? FileManager.default.removeItem(at: transfer.url)
+            onTransferFailed?(transfer.meta.name)
+            return
+        }
+        recordRecent(id: meta.transferId, name: transfer.meta.name, url: transfer.url, inbound: true)
+        onTransferComplete?(transfer.meta.name, true)
+        log.info("Received \(transfer.meta.name) (\(transfer.received) bytes)")
     }
 
     /// Aborts in-flight transfers and deletes partial downloads.
@@ -173,6 +202,49 @@ public final class FileTransferManager: ObservableObject {
     }
 
     // MARK: Helpers
+
+    /// Drops a single in-flight transfer without touching the others.
+    private func abort(id: String, reason: String) {
+        guard let transfer = incoming.removeValue(forKey: id) else { return }
+        try? transfer.handle.close()
+        try? FileManager.default.removeItem(at: transfer.url)
+        finish(id: id)
+        log.warning("Aborted \(transfer.meta.name): \(reason)")
+        onTransferFailed?(transfer.meta.name)
+    }
+
+    /// FILE_CHUNK payload: transferId (16 bytes) || offset (u64 BE) || data.
+    public struct Chunk: Sendable {
+        public let id: String
+        public let offset: Int64
+        public let data: Data
+    }
+
+    /// Returns nil when the payload is too short or the offset is not a
+    /// non-negative value (a corrupt header must never reach the file).
+    public nonisolated static func parseChunk(_ payload: Data) -> Chunk? {
+        guard payload.count >= 24,
+              let id = uuidString(from: Data(payload.prefix(16))),
+              let offset = readUInt64(payload, at: 16),
+              offset <= UInt64(Int64.max)
+        else { return nil }
+        return Chunk(id: id, offset: Int64(offset), data: Data(payload.dropFirst(24)))
+    }
+
+    private nonisolated static func readUInt64(_ data: Data, at index: Int) -> UInt64? {
+        let start = data.startIndex + index
+        guard start + 8 <= data.endIndex else { return nil }
+        return data[start..<(start + 8)].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+    }
+
+    /// Inbound names come from the peer, so keep only the base name: a
+    /// `../` prefix must never escape ~/Downloads/AirRelay.
+    public nonisolated static func safeName(_ raw: String) -> String? {
+        let name = (raw as NSString).lastPathComponent
+            .replacingOccurrences(of: "\0", with: "")
+        guard !name.isEmpty, name != ".", name != ".." else { return nil }
+        return name
+    }
 
     private func updateProgress(id: String, transferred: Int64) {
         if let index = transfers.firstIndex(where: { $0.id == id }) {
@@ -206,12 +278,12 @@ public final class FileTransferManager: ObservableObject {
 
     static let chunkSize = 256 * 1024
 
-    static func uuidBytes(_ id: String) -> Data? {
+    nonisolated static func uuidBytes(_ id: String) -> Data? {
         guard let uuid = UUID(uuidString: id) else { return nil }
         return withUnsafeBytes(of: uuid.uuid) { Data($0) }
     }
 
-    static func uuidString(from data: Data) -> String? {
+    nonisolated static func uuidString(from data: Data) -> String? {
         guard data.count == 16 else { return nil }
         let bytes = [UInt8](data)
         let uuid = UUID(uuid: (

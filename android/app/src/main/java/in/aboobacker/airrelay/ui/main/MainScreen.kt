@@ -140,7 +140,11 @@ internal fun MainScreenContent(
           IconButton(onClick = { onNavigate(Help) }) {
             Icon(Icons.AutoMirrored.Rounded.HelpOutline, contentDescription = "Help")
           }
-          if (connectionState is SyncService.ConnectionState.Connected || connectionState is SyncService.ConnectionState.Disconnected) {
+          if (connectionState is SyncService.ConnectionState.Connected ||
+            connectionState is SyncService.ConnectionState.Disconnected ||
+            connectionState is SyncService.ConnectionState.UpdateRequired ||
+            connectionState is SyncService.ConnectionState.PairingChanged
+          ) {
             IconButton(onClick = { showSettings = true }) {
               Icon(Icons.Rounded.Settings, contentDescription = "Settings")
             }
@@ -164,6 +168,8 @@ internal fun MainScreenContent(
       when (connectionState) {
         is SyncService.ConnectionState.Pairing -> PairingContent(connectionState)
         is SyncService.ConnectionState.PairingDeclined -> DeclinedContent(connectionState)
+        is SyncService.ConnectionState.UpdateRequired -> UpdateRequiredContent(connectionState)
+        is SyncService.ConnectionState.PairingChanged -> PairingChangedContent(connectionState)
         is SyncService.ConnectionState.Connected -> ConnectedContent(
           state = connectionState,
           hasNotifAccess = hasNotifAccess,
@@ -475,6 +481,64 @@ private fun DeclinedContent(state: SyncService.ConnectionState.PairingDeclined) 
     Icon(Icons.Rounded.Refresh, contentDescription = null)
     Spacer(Modifier.size(8.dp))
     Text("Try again")
+  }
+}
+
+@Composable
+private fun UpdateRequiredContent(state: SyncService.ConnectionState.UpdateRequired) {
+  Spacer(modifier = Modifier.height(32.dp))
+  StatusBadge(connected = false, error = true)
+
+  Column(
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.spacedBy(8.dp)
+  ) {
+    Text(
+      text = "Update needed",
+      style = MaterialTheme.typography.headlineMedium,
+      textAlign = TextAlign.Center,
+    )
+    Text(
+      text = state.message,
+      style = MaterialTheme.typography.bodyLarge,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+      textAlign = TextAlign.Center,
+    )
+  }
+}
+
+@Composable
+private fun PairingChangedContent(state: SyncService.ConnectionState.PairingChanged) {
+  Spacer(modifier = Modifier.height(32.dp))
+  StatusBadge(connected = false, error = true)
+
+  Column(
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.spacedBy(8.dp)
+  ) {
+    Text(
+      text = "Pairing expired",
+      style = MaterialTheme.typography.headlineMedium,
+      textAlign = TextAlign.Center,
+    )
+    Text(
+      text = state.message,
+      style = MaterialTheme.typography.bodyLarge,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+      textAlign = TextAlign.Center,
+    )
+  }
+
+  Spacer(modifier = Modifier.height(16.dp))
+
+  Button(
+    onClick = { SyncService.instance?.forgetPairing() },
+    shape = MaterialTheme.shapes.large,
+    modifier = Modifier.fillMaxWidth().height(56.dp),
+  ) {
+    Icon(Icons.Rounded.Refresh, contentDescription = null)
+    Spacer(Modifier.size(8.dp))
+    Text("Pair again")
   }
 }
 

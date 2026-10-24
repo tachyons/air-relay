@@ -3,6 +3,7 @@ package `in`.aboobacker.airrelay.protocol
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -154,11 +155,56 @@ class FrameCodecTest {
     }
 
     @Test
-    fun `rejects unknown type`() {
-        val bytes = byteArrayOf(0, 0, 0, 1, 0xFF.toByte())
-        assertThrows(IOException::class.java) {
-            FrameCodec.read(DataInputStream(ByteArrayInputStream(bytes)))
-        }
+    fun `hello pairing flag is optional`() {
+        // Older builds don't send `pairing`; it must decode as "not pairing".
+        val legacy = ProtocolJson.decodeFromString<Hello>(
+            """{"protocolVersion":1,"deviceName":"Pixel","platform":"android","appVersion":"0.1.0"}""",
+        )
+        assertEquals(false, legacy.pairing)
+        val requesting = ProtocolJson.decodeFromString<Hello>(
+            """{"protocolVersion":1,"deviceName":"Pixel","platform":"android","appVersion":"0.1.0","pairing":true}""",
+        )
+        assertEquals(true, requesting.pairing)
+    }
+
+    @Test
+    fun `skips unknown frame types and keeps reading`() {
+        // A newer peer may send types we don't know yet; the length prefix
+        // keeps us in sync, so skip it instead of dropping the connection.
+        val out = ByteArrayOutputStream()
+        val writer = DataOutputStream(out)
+        writer.writeInt(2)
+        writer.writeByte(0xFF)
+        writer.writeByte(0x7F)
+        FrameCodec.write(writer, Frame(FrameType.PING, ByteArray(0)))
+        val decoded = FrameCodec.read(DataInputStream(ByteArrayInputStream(out.toByteArray())))
+        assertEquals(FrameType.PING, decoded.type)
+        assertEquals(0, decoded.payload.size)
+    }
+
+    @Test
+    fun `file chunk parses header and data`() {
+        val id = "0f8fad5b-d9cb-469f-a165-70867728950e"
+        val payload = FileTransferChunkTestFixtures.chunk(id, 262_144, byteArrayOf(1, 2, 3))
+        val chunk = FileChunk.parse(payload)!!
+        assertEquals(id, chunk.transferId)
+        assertEquals(262_144L, chunk.offset)
+        assertArrayEquals(byteArrayOf(1, 2, 3), chunk.data)
+    }
+
+    @Test
+    fun `file chunk rejects short payload`() {
+        assertNull(FileChunk.parse(byteArrayOf(1, 2, 3)))
+    }
+
+    @Test
+    fun `file chunk rejects negative offset`() {
+        val payload = FileTransferChunkTestFixtures.chunk(
+            "0f8fad5b-d9cb-469f-a165-70867728950e",
+            -1,
+            byteArrayOf(9),
+        )
+        assertNull(FileChunk.parse(payload))
     }
 
     @Test
@@ -167,5 +213,18 @@ class FrameCodecTest {
         assertThrows(IOException::class.java) {
             FrameCodec.read(DataInputStream(ByteArrayInputStream(bytes)))
         }
+    }
+}
+
+/** Builds FILE_CHUNK payloads the way the Mac side does. */
+private object FileTransferChunkTestFixtures {
+    fun chunk(id: String, offset: Long, data: ByteArray): ByteArray {
+        val uuid = java.util.UUID.fromString(id)
+        return java.nio.ByteBuffer.allocate(24 + data.size)
+            .putLong(uuid.mostSignificantBits)
+            .putLong(uuid.leastSignificantBits)
+            .putLong(offset)
+            .put(data)
+            .array()
     }
 }

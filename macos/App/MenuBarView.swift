@@ -5,6 +5,22 @@ struct MenuBarView: View {
     @EnvironmentObject private var engine: SyncEngine
     @Environment(\.openWindow) private var openWindow
 
+    private enum PopoverTab: String, CaseIterable, Identifiable {
+        case notifications, sent, received
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .notifications: "Notifications"
+            case .sent: "Sent"
+            case .received: "Received"
+            }
+        }
+    }
+
+    @State private var tab: PopoverTab = .notifications
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -22,19 +38,22 @@ struct MenuBarView: View {
                 pairingPrompt(pending)
                     .padding(12)
                 Divider()
+            } else if engine.pairingNeedsRepair {
+                repairPrompt
+                    .padding(12)
+                Divider()
             }
             if !engine.fileTransfer.transfers.isEmpty {
                 activeTransfers
                     .padding(12)
                 Divider()
             }
-            notificationList
+            tabPicker
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             Divider()
-            if !engine.fileTransfer.recentFiles.isEmpty {
-                recentFilesList
-                    .padding(12)
-                Divider()
-            }
+            tabContent
+            Divider()
             dropZone
             Divider()
             footer
@@ -59,7 +78,9 @@ struct MenuBarView: View {
                     Circle()
                         .fill(engine.isConnected ? .green : .orange)
                         .frame(width: 7, height: 7)
-                    Text(engine.isConnected ? "Connected" : "Searching")
+                    Text(engine.isConnected
+                        ? "Connected"
+                        : (engine.pairingNeedsRepair ? "Pairing expired" : "Searching"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if let status = engine.deviceStatus {
@@ -120,6 +141,20 @@ struct MenuBarView: View {
 
     // MARK: Pairing
 
+    private var repairPrompt: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Pairing expired", systemImage: "link.badge.plus")
+                .font(.subheadline.bold())
+            Text("Pair again, then confirm the code shown on both devices.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Button("Pair Again") { engine.repairPairing() }
+                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func pairingPrompt(_ pending: SyncEngine.PendingPairing) -> some View {
         VStack(spacing: 10) {
             Label("Pairing request", systemImage: "link.badge.plus")
@@ -145,21 +180,42 @@ struct MenuBarView: View {
         }
     }
 
+    // MARK: Tabs
+
+    private var tabPicker: some View {
+        Picker("View", selection: $tab) {
+            ForEach(PopoverTab.allCases) { item in
+                Text(item.title).tag(item)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch tab {
+        case .notifications:
+            notificationList
+        case .sent:
+            fileList(
+                engine.fileTransfer.recentFiles.filter { !$0.inbound },
+                empty: "No files sent yet"
+            )
+        case .received:
+            fileList(
+                engine.fileTransfer.recentFiles.filter { $0.inbound },
+                empty: "No files received yet"
+            )
+        }
+    }
+
     // MARK: Notifications
 
     private var notificationList: some View {
         Group {
             if engine.notifications.isEmpty {
-                VStack(spacing: 6) {
-                    Image(systemName: "bell.slash")
-                        .font(.title3)
-                        .foregroundStyle(.tertiary)
-                    Text("No notifications")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
+                emptyState(icon: "bell.slash", text: "No notifications")
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
@@ -204,44 +260,63 @@ struct MenuBarView: View {
         }
     }
 
-    // MARK: Recent files - 5 visible, expando to 10
+    // MARK: Sent / received files
 
-    @State private var showAllRecent = false
-
-    private var recentFilesList: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(engine.fileTransfer.recentFiles.prefix(showAllRecent ? 10 : 5)) { file in
-                Button {
-                    if let url = file.url {
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
+    private func fileList(_ files: [FileTransferManager.RecentFile], empty: String) -> some View {
+        Group {
+            if files.isEmpty {
+                emptyState(icon: "tray", text: empty)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(files) { file in
+                            fileRow(file)
+                        }
                     }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: file.inbound
-                            ? "arrow.down.doc" : "arrow.up.doc")
-                            .foregroundStyle(.secondary)
-                        Text(file.name)
-                            .font(.caption)
-                            .lineLimit(1)
-                        Spacer()
-                        Text(file.date, style: .relative)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .contentShape(Rectangle())
+                    .padding(.vertical, 4)
                 }
-                .buttonStyle(.plain)
-                .help(file.inbound ? "Show in Finder" : "Sent to phone")
-            }
-            if engine.fileTransfer.recentFiles.count > 5 {
-                Button(showAllRecent ? "Show less" : "Show all 10 →") {
-                    withAnimation { showAllRecent.toggle() }
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .buttonStyle(.plain)
+                .frame(maxHeight: 260)
             }
         }
+    }
+
+    private func fileRow(_ file: FileTransferManager.RecentFile) -> some View {
+        Button {
+            if let url = file.url {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: file.inbound
+                    ? "arrow.down.doc" : "arrow.up.doc")
+                    .foregroundStyle(.secondary)
+                Text(file.name)
+                    .font(.caption)
+                    .lineLimit(1)
+                Spacer()
+                Text(file.date, style: .relative)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(file.inbound ? "Show in Finder" : "Sent to phone — show in Finder")
+    }
+
+    private func emptyState(icon: String, text: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(.tertiary)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
     }
 
     @State private var dropTargeted = false

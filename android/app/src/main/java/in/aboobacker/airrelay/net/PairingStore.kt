@@ -15,7 +15,7 @@ class PairingStore(context: Context) {
         get() = prefs.getString("peerName", null)
         set(value) = prefs.edit { putString("peerName", value) }
 
-    val isPaired: Boolean get() = peerFingerprint != null
+    val isPaired: Boolean get() = !peerFingerprint.isNullOrBlank()
 
     fun clear() = prefs.edit { clear() }
 }

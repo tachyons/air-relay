@@ -2,6 +2,14 @@ package `in`.aboobacker.airrelay.protocol
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.nio.ByteBuffer
+import java.util.UUID
+
+/**
+ * Wire protocol this build speaks. Bump together with docs/PROTOCOL.md; a
+ * mismatch is shown to the user instead of half-working.
+ */
+const val PROTOCOL_VERSION = 1
 
 val ProtocolJson = Json {
     ignoreUnknownKeys = true
@@ -10,10 +18,12 @@ val ProtocolJson = Json {
 
 @Serializable
 data class Hello(
-    val protocolVersion: Int = 1,
+    val protocolVersion: Int = PROTOCOL_VERSION,
     val deviceName: String,
     val platform: String = "android",
     val appVersion: String,
+    /** True while this side waits for the user to confirm a pairing code. */
+    val pairing: Boolean = false,
 )
 
 @Serializable
@@ -99,3 +109,27 @@ data class FocusState(val dnd: Boolean)
 
 @Serializable
 data class RingerAction(val mode: String)
+
+/**
+ * FILE_CHUNK binary payload: transferId (16 bytes) || offset (u64 BE) || data.
+ * Parsing is defensive: a short or malformed header returns null so the
+ * read loop can drop it instead of failing the connection.
+ */
+class FileChunk private constructor(
+    val transferId: String,
+    val offset: Long,
+    val data: ByteArray,
+) {
+    companion object {
+        fun parse(payload: ByteArray): FileChunk? {
+            if (payload.size < 24) return null
+            val buffer = ByteBuffer.wrap(payload)
+            val id = UUID(buffer.long, buffer.long).toString()
+            val offset = buffer.long
+            if (offset < 0) return null
+            val data = ByteArray(buffer.remaining())
+            buffer.get(data)
+            return FileChunk(id, offset, data)
+        }
+    }
+}
