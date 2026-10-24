@@ -9,7 +9,7 @@ transport over mutual TLS 1.3 with QR-code certificate pinning. No cloud, no acc
 
 | Android | macOS |
 |---|---|
-| <img src="screenshots/android.png" alt="Android app: connected screen with active features" width="320"> | <img src="screenshots/mac.png" alt="macOS menu bar popover: notifications, files, and battery status" width="400"> |
+| <img src="docs/screenshots/android.png" alt="Android app: connected screen with active features" width="320"> | <img src="docs/screenshots/mac.png" alt="macOS menu bar popover: notifications, files, and battery status" width="400"> |
 
 ## Features
 

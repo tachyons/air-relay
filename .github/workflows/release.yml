@@ -45,13 +45,15 @@ jobs:
           [ "$version" = "$GITHUB_REF_NAME" ] && version=${GITHUB_SHA::7}
           apk=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
           cp "$apk" "AirRelay-$version.apk"
+          # Stable alias so /releases/latest/download/AirRelay.apk always works.
+          cp "$apk" AirRelay.apk
       - name: Verify tag matches the version stamps
         if: startsWith(github.ref, 'refs/tags/v')
         run: scripts/version.sh check "$GITHUB_REF_NAME"
       - uses: actions/upload-artifact@v4
         with:
           name: android-release
-          path: AirRelay-*.apk
+          path: AirRelay*.apk
           retention-days: 30
 
   macos:
@@ -74,10 +76,12 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent \
             macos/.build/xcode/Build/Products/Release/AirRelay.app \
             "AirRelay-$version.zip"
+          # Stable alias for /releases/latest/download/AirRelay.zip.
+          cp "AirRelay-$version.zip" AirRelay.zip
       - uses: actions/upload-artifact@v4
         with:
           name: macos-release
-          path: AirRelay-*.zip
+          path: AirRelay*.zip
           retention-days: 30
 
   publish:
@@ -95,5 +99,5 @@ jobs:
           draft: true
           generate_release_notes: true
           files: |
-            AirRelay-*.apk
-            AirRelay-*.zip
+            AirRelay*.apk
+            AirRelay*.zip

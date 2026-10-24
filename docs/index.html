@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Air Relay — your phone and Mac, in sync</title>
+<meta name="description" content="Notifications, calls, clipboard and files between Android and macOS over your own Wi-Fi. No account, no cloud, no tracking.">
+<link rel="icon" href="icon.png">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #16181d;
+    --muted: #5c626e;
+    --line: #e4e6eb;
+    --card: #f6f7f9;
+    --accent: #2f6df6;
+    --accent-fg: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1013;
+      --fg: #eceef2;
+      --muted: #9aa1ad;
+      --line: #24272e;
+      --card: #16191e;
+      --accent: #5b8cff;
+      --accent-fg: #0b0d10;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 64px 24px 96px; }
+  h1 { font-size: 40px; line-height: 1.15; margin: 0 0 12px; letter-spacing: -0.02em; }
+  h2 { font-size: 20px; margin: 48px 0 12px; letter-spacing: -0.01em; }
+  p  { margin: 0 0 16px; }
+  a { color: var(--accent); }
+  .lede { font-size: 19px; color: var(--muted); margin-bottom: 32px; }
+  header { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; }
+  header img { width: 56px; height: 56px; border-radius: 12px; }
+  header span { font-weight: 600; letter-spacing: -0.01em; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+  .btn {
+    display: inline-block;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-weight: 600;
+    text-decoration: none;
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+  .btn.secondary {
+    background: transparent;
+    color: var(--fg);
+    border: 1px solid var(--line);
+  }
+  .meta { color: var(--muted); font-size: 14px; }
+  .shots { display: flex; gap: 16px; margin: 32px 0 8px; flex-wrap: wrap; }
+  .shots img { width: 100%; max-width: 320px; border-radius: 14px; border: 1px solid var(--line); }
+  ul { padding-left: 20px; margin: 0 0 16px; }
+  li { margin-bottom: 8px; }
+  ol { padding-left: 22px; margin: 0 0 16px; }
+  .note {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin: 0 0 16px;
+  }
+  .note p:last-child { margin-bottom: 0; }
+  .note strong { display: block; margin-bottom: 6px; }
+  code {
+    font: 0.9em ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1px 5px;
+  }
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 14px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <header>
+    <img src="icon.png" alt="">
+    <span>Air Relay</span>
+  </header>
+
+  <h1>Your phone and Mac,<br>in sync.</h1>
+  <p class="lede">
+    Notifications, calls, clipboard and files between Android and macOS — over
+    your own Wi-Fi. No account, no cloud, nothing to configure.
+  </p>
+
+  <div class="buttons">
+    <a class="btn" href="https://github.com/tachyons/air-relay/releases/latest/download/AirRelay.apk">Download for Android</a>
+    <a class="btn" href="https://github.com/tachyons/air-relay/releases/latest/download/AirRelay.zip">Download for macOS</a>
+  </div>
+  <p class="meta">
+    Android 10 or newer · macOS 14 or newer ·
+    <a href="https://github.com/tachyons/air-relay/releases">all releases</a>
+  </p>
+
+  <div class="shots">
+    <img src="screenshots/android.png" alt="The Android app, connected">
+    <img src="screenshots/mac.png" alt="The Mac menu bar app">
+  </div>
+
+  <h2>What it does</h2>
+  <ul>
+    <li>Phone notifications appear on the Mac, and you can reply from there.</li>
+    <li>Calls ring on both — answer, decline or hang up from the Mac, and the phone switches to speakerphone.</li>
+    <li>Copy on one device, paste on the other.</li>
+    <li>Send files from either side, straight to Downloads.</li>
+    <li>Focus mode, media controls and battery status stay in step.</li>
+    <li>Ring your phone from the menu bar when it is lost in the sofa.</li>
+  </ul>
+
+  <h2>Install on Android</h2>
+  <ol>
+    <li>Download <code>AirRelay.apk</code> on the phone and open it.</li>
+    <li>Allow your browser or file manager to install unknown apps when asked.</li>
+    <li>Open Air Relay and keep it running.</li>
+  </ol>
+
+  <div class="note">
+    <p><strong>Play Protect may refuse the install.</strong></p>
+    <p>
+      "App blocked to protect your device" is the scanner's default answer for
+      any app it has no history with, not a finding about this one. To continue:
+      Play Store → profile → Play Protect → gear → turn off
+      <em>Scan apps with Play Protect</em>, then open the APK again.
+      If the phone has <em>Advanced Protection</em> turned on
+      (Settings → Security &amp; privacy), sideloading is blocked outright and has
+      to be allowed first.
+    </p>
+  </div>
+
+  <h2>Install on macOS</h2>
+  <ol>
+    <li>Download <code>AirRelay.zip</code> and unzip it.</li>
+    <li>Drag <strong>AirRelay</strong> into Applications.</li>
+    <li>Right-click the app and choose <strong>Open</strong> the first time.</li>
+  </ol>
+
+  <div class="note">
+    <p><strong>The Mac app is not notarised yet.</strong></p>
+    <p>
+      macOS will warn that it cannot check the app for malicious software.
+      Right-click → Open, or run
+      <code>xattr -dr com.apple.quarantine /Applications/AirRelay.app</code>
+      once. The source is on GitHub, so you can also build it yourself.
+    </p>
+  </div>
+
+  <h2>Pair the two</h2>
+  <ol>
+    <li>Open Air Relay on the Mac — the menu bar icon shows a QR code.</li>
+    <li>Scan it from the phone app, then check that the two short codes match and tap Pair.</li>
+  </ol>
+  <p class="meta">
+    After that they find each other automatically on the same network. Unpair
+    any time from the phone's settings.
+  </p>
+
+  <h2>Privacy</h2>
+  <p>
+    The apps talk directly to each other over an encrypted connection, pinned to
+    the two devices after that first pairing. There is no server, no account and
+    no analytics — nothing leaves your network.
+  </p>
+  <p>
+    The phone asks for notification access, call control, and the camera only
+    when you use the camera preview. It reads neither your contacts nor your
+    call log.
+    <a href="https://github.com/tachyons/air-relay#permissions">The full permission list</a>.
+  </p>
+
+  <footer>
+    <span>GPL-3.0 · <a href="https://github.com/tachyons/air-relay">Source on GitHub</a></span>
+    <span>F-Droid build pending</span>
+  </footer>
+
+</main>
+</body>
+</html>
