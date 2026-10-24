@@ -115,8 +115,10 @@ for nothing it does not use.
 | `FOREGROUND_SERVICE` (+`_CONNECTED_DEVICE`, `_CAMERA`) | keeping the link alive in the background | install |
 | `READ_PHONE_STATE`, `ANSWER_PHONE_CALLS` | showing calls on the Mac, answering/declining them | first launch |
 | `RECEIVE_BOOT_COMPLETED` | reconnecting after a restart | install |
-| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | stopping Android from killing the link overnight | only via the in-app "Keep connection in background" row |
 | `CAMERA` | the phone-camera preview in the Mac menu bar | only when you open that preview |
+
+Battery exemption is not a permission: the "Keep connection in background" row
+opens the system battery screen, where you allow Air Relay to run unrestricted.
 
 Caller names come from the dialer's own incoming-call notification — the app
 reads neither your contacts nor your call log, and it declares no storage,

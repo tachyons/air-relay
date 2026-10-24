@@ -179,7 +179,7 @@ internal fun MainScreenContent(
             settingsLauncher.launch(Permissions.notificationAccessIntent(context))
           },
           onFixBattery = {
-            batteryLauncher.launch(Permissions.batteryOptimizationIntent(context))
+            batteryLauncher.launch(Permissions.batteryOptimizationIntent())
           },
           onFixPermissions = {
             permissionLauncher.launch(missingRuntime.toTypedArray())
@@ -660,7 +660,7 @@ private fun ConnectedContent(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
       if (!hasNotifAccess) FixItCard(icon = Icons.Rounded.Notifications, title = "Notifications need permission", action = "Fix", onClick = onFixNotifications)
       if (missingRuntime.isNotEmpty()) FixItCard(icon = Icons.Rounded.Phonelink, title = "Phone calls need permission", action = "Grant", onClick = onFixPermissions)
-      if (!batteryExempt) FixItCard(icon = Icons.Rounded.BatteryAlert, title = "Keep connection in background", action = "Allow", onClick = onFixBattery)
+      if (!batteryExempt) FixItCard(icon = Icons.Rounded.BatteryAlert, title = "Keep connection in background", action = "Open", onClick = onFixBattery)
     }
   } else {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {

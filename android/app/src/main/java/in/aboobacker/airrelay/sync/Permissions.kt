@@ -54,7 +54,8 @@ object Permissions {
         context.getSystemService(android.os.PowerManager::class.java)
             .isIgnoringBatteryOptimizations(context.packageName)
 
-    fun batteryOptimizationIntent(context: Context): Intent =
-        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-            .setData(android.net.Uri.parse("package:${context.packageName}"))
+    fun batteryOptimizationIntent(): Intent =
+        // The per-app exemption dialog needs REQUEST_IGNORE_BATTERY_OPTIMIZATIONS;
+        // the system list does not, so the app declares no permission for this.
+        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
 }
