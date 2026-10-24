@@ -6,14 +6,11 @@ plugins {
   alias(libs.plugins.kotlin.serialization)
 }
 
-// Release tags (vX.Y.Z) drive the version; local builds fall back to the default.
-val defaultVersion = "0.2.0"
-val taggedVersion = System.getenv("GITHUB_REF_NAME")
-  ?.removePrefix("v")
-  ?.takeIf { Regex("""\d+\.\d+\.\d+""").matches(it) }
-val appVersion = taggedVersion ?: defaultVersion
-val appVersionCode = appVersion.split(".")
-  .let { (major, minor, patch) -> major.toInt() * 10_000 + minor.toInt() * 100 + patch.toInt() }
+// Bump these together when tagging a release. F-Droid (and any other build
+// that isn't our release workflow) reads the literals, so they must always
+// describe the code in the tree.
+val appVersion = "0.3.1"
+val appVersionCode = 301
 
 android {
     namespace = "in.aboobacker.airrelay"

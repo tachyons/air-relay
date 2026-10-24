@@ -45,6 +45,18 @@ jobs:
           [ "$version" = "$GITHUB_REF_NAME" ] && version=${GITHUB_SHA::7}
           apk=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
           cp "$apk" "AirRelay-$version.apk"
+      - name: Verify tag matches the built version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag=${GITHUB_REF_NAME#v}
+          aapt2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | tail -1)
+          apk=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          got=$("$aapt2" dump badging "$apk" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)
+          echo "tag=$tag built=$got"
+          if [ "$tag" != "$got" ]; then
+            echo "::error::built versionName $got does not match tag $tag — bump appVersion/appVersionCode in android/app/build.gradle.kts"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: android-release

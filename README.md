@@ -100,8 +100,11 @@ this app.
 To install anyway: Play Store → profile → Play Protect → gear → turn off
 **Scan apps with Play Protect**, then reopen the APK. If the phone has
 **Advanced Protection** enabled (Settings → Security & privacy), sideloading is
-blocked outright and must be turned off first. The app has no Play listing;
-[its permissions](#permissions) are the full list of what it can ask for.
+blocked outright and must be turned off first. The app has no Play listing
+(other than an [F-Droid build](fdroid/), once submitted); [its
+permissions](#permissions) are the full list of what it can ask for. Install
+from one source only — F-Droid and the release APK are signed with different
+keys, so they cannot replace each other.
 
 ## Permissions
 
@@ -128,3 +131,7 @@ location, or SMS access.
 
 - [docs/PROTOCOL.md](docs/PROTOCOL.md) — wire protocol, message schemas, pairing flow
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system decomposition and platform notes
+
+## License
+
+[GPL-3.0-or-later](LICENSE). The F-Droid recipe lives in [`fdroid/`](fdroid/).

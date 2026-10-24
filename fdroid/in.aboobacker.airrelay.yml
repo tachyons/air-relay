@@ -1,0 +1,53 @@
+# F-Droid build recipe. Submit by opening a merge request against
+# https://gitlab.com/fdroid/fdroiddata with this file at
+# metadata/in.aboobacker.airrelay.yml. Kept here so the recipe travels with
+# the source it describes; keep Builds in sync when tagging a release.
+#
+# F-Droid signs with its own key, so an F-Droid install cannot be updated with
+# a GitHub-release APK (or vice versa) — users pick one source and stay on it.
+
+Categories:
+  - Connectivity
+  - Phone & SMS
+License: GPL-3.0-or-later
+AuthorName: Aboobacker MK
+AuthorEmail: aboobackervyd@gmail.com
+SourceCode: https://github.com/tachyons/air-relay
+IssueTracker: https://github.com/tachyons/air-relay/issues
+Changelog: https://github.com/tachyons/air-relay/releases
+
+AutoName: Air Relay
+
+Summary: Keep your phone and Mac in sync over your own network
+Description: |-
+  Air Relay mirrors what happens on your Android phone to your Mac, and lets you
+  act on it from there, over a direct encrypted connection on your local
+  network.
+
+  Notifications appear on the Mac and can be replied to. Calls ring on both,
+  and can be answered, declined or hung up from the Mac with the phone
+  switching to speakerphone. Clipboard, files, Focus mode and media controls
+  sync both ways, and there is a "find my phone" ring from the menu bar.
+
+  There is no account, no server and no telemetry: the two apps find each other
+  with Bonjour, pair once by scanning a QR code or comparing a short code, and
+  pin each other's certificates afterwards. Nothing leaves your network.
+
+  The phone app asks for notification access, call control and camera only for
+  the features that use them. It reads neither your contacts nor your call log.
+
+RepoType: git
+Repo: https://github.com/tachyons/air-relay.git
+
+Builds:
+  - versionName: 0.3.1
+    versionCode: 301
+    commit: v0.3.1
+    subdir: android
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 0.3.1
+CurrentVersionCode: 301
