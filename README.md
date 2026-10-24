@@ -71,6 +71,7 @@ make test           # all unit tests
 make run-macos      # build + launch the menu bar app
 make run-android    # build + deploy + launch on a connected device (android CLI)
 make release        # release builds
+make bump VERSION=x.y.z  # bump android + fdroid + macOS version stamps
 make xcodeproj      # regenerate AirRelay.xcodeproj after editing project.yml
 make doctor         # check the toolchain
 ```

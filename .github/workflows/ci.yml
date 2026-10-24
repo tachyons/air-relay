@@ -62,3 +62,11 @@ jobs:
           make macos | xcbeautify --renderer github-actions
       - name: Tests
         run: make macos-test
+
+  versions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version stamps agree
+        run: scripts/version.sh check

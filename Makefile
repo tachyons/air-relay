@@ -11,10 +11,14 @@
 #   make run-macos      Build and launch the macOS app
 #   make install-android  Build + install APK on the connected device (android CLI)
 #   make release        Release builds for both platforms
+#   make bump VERSION=x.y.z  Bump every version stamp (android, fdroid, macos)
 #   make clean          Remove build artifacts
 
 ANDROID_DIR := android
 MACOS_DIR   := macos
+
+# Bump every version stamp at once (android, fdroid recipe, macos plist).
+VERSION ?=
 
 # Prefer Android Studio's bundled JDK when present (Gradle-supported version).
 STUDIO_JBR  := /Applications/Android Studio.app/Contents/jbr/Contents/Home
@@ -37,7 +41,7 @@ MAC_APP     := $(MACOS_DIR)/$(DERIVED)/Build/Products/Debug/AirRelay.app
 
 .PHONY: build test release clean \
         android android-test android-lint android-release run-android \
-        macos macos-test macos-release run-macos xcodeproj doctor
+        macos macos-test macos-release run-macos xcodeproj doctor bump
 
 build: android macos
 
@@ -92,6 +96,10 @@ run-macos: macos
 	fi
 
 # ------------------------------------------------------------------- misc
+
+bump:
+	@test -n "$(VERSION)" || { echo "usage: make bump VERSION=x.y.z"; exit 1; }
+	@scripts/version.sh bump $(VERSION)
 
 doctor:
 	@echo "android CLI: $$(command -v $(ANDROID_CLI) || echo MISSING)"

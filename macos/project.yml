@@ -23,8 +23,8 @@ targets:
         CFBundleName: AirRelay
         CFBundleDisplayName: Air Relay
         CFBundleIdentifier: in.aboobacker.airrelay.mac
-        CFBundleShortVersionString: "0.2.0"
-        CFBundleVersion: "2"
+        CFBundleShortVersionString: "0.3.1"
+        CFBundleVersion: "301"
         CFBundleIconName: AppIcon
         LSMinimumSystemVersion: "14.0"
         LSUIElement: true
