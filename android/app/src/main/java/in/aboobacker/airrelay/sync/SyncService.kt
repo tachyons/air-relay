@@ -16,6 +16,7 @@ import `in`.aboobacker.airrelay.net.DiscoveryManager
 import `in`.aboobacker.airrelay.net.PairingStore
 import `in`.aboobacker.airrelay.net.TlsClient
 import `in`.aboobacker.airrelay.net.isPinnedPeerMismatch
+import `in`.aboobacker.airrelay.protocol.CameraStart
 import `in`.aboobacker.airrelay.protocol.ClipboardText
 import `in`.aboobacker.airrelay.protocol.Frame
 import `in`.aboobacker.airrelay.protocol.FrameType
@@ -66,6 +67,9 @@ class SyncService : androidx.lifecycle.LifecycleService() {
     lateinit var fileTransfer: FileTransfer
         private set
     private var cameraStreamer: CameraStreamer? = null
+    /** Camera request waiting on the user to grant access; see [startPendingCamera]. */
+    private var pendingCamera: CameraStart? = null
+    private var statusText = "Waiting for Mac…"
 
     @Volatile
     private var awaitingPongs = 0
@@ -98,9 +102,8 @@ class SyncService : androidx.lifecycle.LifecycleService() {
 
         startForeground(
             NOTIFICATION_ID,
-            buildNotification("Waiting for Mac…"),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            buildNotification(statusText),
+            foregroundTypes(camera = cameraStreamer != null),
         )
         if (connectionJob?.isActive != true) {
             connectionJob = scope.launch { connectionLoop() }
@@ -403,28 +406,76 @@ class SyncService : androidx.lifecycle.LifecycleService() {
     }
 
     private fun handleCameraStart(frame: Frame) {
-        if (androidx.core.content.ContextCompat.checkSelfPermission(
-                this,
-                android.Manifest.permission.CAMERA,
-            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) {
-            Log.w(TAG, "CAMERA permission not granted; ignoring CAMERA_START")
+        val config = ProtocolJson.decodeFromString<CameraStart>(frame.payload.decodeToString())
+        if (!Permissions.hasCamera(this)) {
+            // A service can't show a permission prompt; route through the UI.
+            pendingCamera = config
+            promptForCamera()
             return
         }
-        val config = ProtocolJson.decodeFromString<`in`.aboobacker.airrelay.protocol.CameraStart>(
-            frame.payload.decodeToString(),
-        )
+        startCameraStream(config)
+    }
+
+    /** Called by MainActivity once the user has approved camera access. */
+    fun startPendingCamera() {
+        val config = pendingCamera ?: return
+        pendingCamera = null
+        startCameraStream(config)
+    }
+
+    private fun startCameraStream(config: CameraStart) {
         mainExecutor.execute {
-            cameraStreamer?.stop()
-            cameraStreamer = CameraStreamer(this, config).also { it.start(this) }
+            runCatching {
+                // Camera is a while-in-use resource: the type is only accepted
+                // while the app is visible, which the prompt flow guarantees.
+                // ponytail: a granted permission + background request can still be
+                // refused here, leaving the preview black until the next attempt;
+                // route every request through the prompt if that bites.
+                setForegroundTypes(camera = true)
+                cameraStreamer?.stop()
+                cameraStreamer = CameraStreamer(this, config).also { it.start(this) }
+            }.onFailure { Log.w(TAG, "Camera start failed: ${it.message}") }
         }
     }
 
     private fun handleCameraStop() {
+        pendingCamera = null
+        getSystemService(NotificationManager::class.java).cancel(CAMERA_NOTIFICATION_ID)
         mainExecutor.execute {
             cameraStreamer?.stop()
             cameraStreamer = null
+            setForegroundTypes(camera = false)
         }
+    }
+
+    private fun promptForCamera() {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_CAMERA_ID,
+                "Camera requests",
+                NotificationManager.IMPORTANCE_HIGH,
+            ),
+        )
+        val allow = Intent(this, `in`.aboobacker.airrelay.MainActivity::class.java)
+            .putExtra(EXTRA_ALLOW_CAMERA, true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val notification = Notification.Builder(this, CHANNEL_CAMERA_ID)
+            .setContentTitle("Your Mac wants to use this phone's camera")
+            .setContentText("Tap to allow")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentIntent(
+                android.app.PendingIntent.getActivity(
+                    this,
+                    6,
+                    allow,
+                    android.app.PendingIntent.FLAG_IMMUTABLE or
+                        android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+                ),
+            )
+            .setAutoCancel(true)
+            .build()
+        manager.notify(CAMERA_NOTIFICATION_ID, notification)
     }
 
     /**
@@ -552,7 +603,6 @@ class SyncService : androidx.lifecycle.LifecycleService() {
                 NotificationChannel(CHANNEL_PAIR_ID, "Pairing requests", NotificationManager.IMPORTANCE_HIGH),
             )
             builder.setChannelId(CHANNEL_PAIR_ID)
-            builder.setFullScreenIntent(null, true) // make it heads-up
 
             val acceptIntent = Intent(this, SyncService::class.java).setAction(ACTION_PAIR_ACCEPT)
             val declineIntent = Intent(this, SyncService::class.java).setAction(ACTION_PAIR_DECLINE)
@@ -573,8 +623,23 @@ class SyncService : androidx.lifecycle.LifecycleService() {
     }
 
     private fun updateNotification(text: String) {
+        statusText = text
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification(text))
+    }
+
+    private fun foregroundTypes(camera: Boolean): Int =
+        ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
+            (if (camera) ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0)
+
+    /**
+     * Re-declares the foreground service type. File transfer rides on
+     * connectedDevice: dataSync would be stopped by Android 15's 6h/24h cap.
+     */
+    private fun setForegroundTypes(camera: Boolean) {
+        runCatching {
+            startForeground(NOTIFICATION_ID, buildNotification(statusText), foregroundTypes(camera))
+        }.onFailure { Log.w(TAG, "Could not set foreground types: ${it.message}") }
     }
 
     override fun onBind(intent: Intent): IBinder? {
@@ -612,15 +677,18 @@ class SyncService : androidx.lifecycle.LifecycleService() {
         private const val CHANNEL_PAIR_ID = "pairing_requests"
         private const val CHANNEL_HOTSPOT_ID = "hotspot_requests"
         private const val CHANNEL_URL_ID = "links_from_mac"
+        private const val CHANNEL_CAMERA_ID = "camera_requests"
         private const val NOTIFICATION_ID = 1
         private const val HOTSPOT_NOTIFICATION_ID = 5
         private const val URL_NOTIFICATION_ID = 4
+        private const val CAMERA_NOTIFICATION_ID = 6
         private const val KEEPALIVE_INTERVAL_MS = 15_000L
         private const val PAIRING_TIMEOUT_MS = 120_000L
 
         private const val ACTION_PAIR_ACCEPT = "in.aboobacker.airrelay.PAIR_ACCEPT"
         private const val ACTION_PAIR_DECLINE = "in.aboobacker.airrelay.PAIR_DECLINE"
         const val ACTION_FIND_PHONE_STOP = "in.aboobacker.airrelay.FIND_PHONE_STOP"
+        const val EXTRA_ALLOW_CAMERA = "in.aboobacker.airrelay.ALLOW_CAMERA"
 
         @Volatile
         var instance: SyncService? = null

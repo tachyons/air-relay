@@ -8,11 +8,9 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
-import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.provider.ContactsContract
 import android.telecom.TelecomManager
 import android.telephony.TelephonyManager
 import android.util.Log
@@ -26,9 +24,12 @@ import kotlinx.serialization.encodeToString
 import java.util.UUID
 
 /**
- * Tracks call state via the PHONE_STATE broadcast (which carries the incoming
- * number when READ_CALL_LOG is granted, unlike TelephonyCallback) and forwards
- * ringing/active/ended events to the Mac with caller ID resolved from contacts.
+ * Tracks call state via the PHONE_STATE broadcast and forwards
+ * ringing/active/ended events to the Mac.
+ *
+ * Caller ID comes from the dialer's own incoming-call notification (captured by
+ * [NotificationRelayService]) rather than contacts or the call log, so the app
+ * declares neither permission.
  *
  * Remote answer uses TelecomManager.acceptRingingCall and reject/hangup uses
  * TelecomManager.endCall (both work for non-default-dialer apps holding
@@ -42,8 +43,8 @@ class CallMonitor(private val context: Context) {
     private val bgExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private var receiver: BroadcastReceiver? = null
     private var currentCallId: String? = null
-    private var currentNumber: String? = null
     private var lastState = TelephonyManager.EXTRA_STATE_IDLE
+
 
     /** Set when the Mac triggered the answer, so we can auto-route audio. */
     private var answeredFromMac = false
@@ -66,9 +67,7 @@ class CallMonitor(private val context: Context) {
         val r = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE) ?: return
-                @Suppress("DEPRECATION")
-                val number = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
-                handleStateChange(state, number)
+                handleStateChange(state)
             }
         }
         context.registerReceiver(r, IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED))
@@ -81,21 +80,14 @@ class CallMonitor(private val context: Context) {
         receiver = null
     }
 
-    private fun handleStateChange(state: String, number: String?) {
+    private fun handleStateChange(state: String) {
         if (!FeaturePrefs(context).callSync) return
-        // The broadcast fires once per SIM/phone account with the same state;
-        // also fires with a null number first, then again with the number.
-        if (number != null) currentNumber = number
+        // The broadcast fires once per SIM/phone account with the same state.
         val stateName = when (state) {
             TelephonyManager.EXTRA_STATE_RINGING -> {
-                if (lastState == state) {
-                    // Duplicate ringing broadcast — resend only if number just arrived
-                    if (number == null) return
-                    "ringing"
-                } else {
-                    currentCallId = UUID.randomUUID().toString()
-                    "ringing"
-                }
+                if (lastState == state) return
+                currentCallId = UUID.randomUUID().toString()
+                "ringing"
             }
             TelephonyManager.EXTRA_STATE_OFFHOOK -> {
                 if (lastState == state) return
@@ -117,77 +109,38 @@ class CallMonitor(private val context: Context) {
         }
         lastState = state
         val callId = currentCallId ?: return
-        val callerNumber = currentNumber
-        if (stateName == "ended") {
-            currentCallId = null
-            currentNumber = null
-        }
+        if (stateName == "ended") currentCallId = null
 
-        // Contact enrichment (ContactsProvider I/O + bitmap) is off the
-        // receiver/main thread so we don't risk ANR; a single-thread
-        // executor preserves call-state ordering.
+        // Label lookup blocks briefly, so keep it off the receiver/main thread;
+        // the single-thread executor preserves call-state ordering.
         bgExecutor.execute {
-            val contact = callerNumber?.let { lookupContact(it) }
+            val label = if (stateName == "ringing") awaitCallerLabel() else callerLabel
             val payload = CallState(
                 callId = callId,
                 state = stateName,
-                displayName = contact?.name,
-                number = callerNumber,
-                photoPng = contact?.photoPng,
+                displayName = label,
             )
-            Log.i(TAG, "Call state: $stateName number=${callerNumber != null}")
+            Log.i(TAG, "Call state: $stateName labeled=${label != null}")
             SyncService.instance?.send(
                 FrameType.CALL_STATE,
                 ProtocolJson.encodeToString(payload).encodeToByteArray(),
             )
+            if (stateName == "ended") clearCallNotification()
         }
     }
 
-    private data class Contact(val name: String?, val photoPng: String?)
-
-    /** Cached per number so repeated state changes don't re-query or re-encode. */
-    private val contactCache = HashMap<String, Contact?>()
-
-    private fun lookupContact(number: String): Contact? {
-        if (!granted(Manifest.permission.READ_CONTACTS)) return null
-        if (contactCache.containsKey(number)) return contactCache[number]
-        val uri = Uri.withAppendedPath(
-            ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
-            Uri.encode(number),
-        )
-        val result: Contact? = runCatching {
-            context.contentResolver.query(
-                uri,
-                arrayOf(
-                    ContactsContract.PhoneLookup.DISPLAY_NAME,
-                    ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI,
-                ),
-                null,
-                null,
-                null,
-            )?.use { cursor ->
-                if (!cursor.moveToFirst()) return@use null
-                Contact(
-                    name = cursor.getString(0),
-                    photoPng = cursor.getString(1)?.let { encodePhoto(Uri.parse(it)) },
-                )
-            }
-        }.getOrNull()
-        contactCache[number] = result
-        return result
-    }
-
-    /** Reads a contact photo thumbnail and re-encodes it as base64 PNG (same
-     *  pattern as notification app icons). Thumbnails are already small. */
-    private fun encodePhoto(photoUri: Uri): String? = runCatching {
-        context.contentResolver.openInputStream(photoUri)?.use { stream ->
-            val bitmap = android.graphics.BitmapFactory.decodeStream(stream) ?: return@use null
-            val out = java.io.ByteArrayOutputStream()
-            if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)) return@use null
-            bitmap.recycle()
-            android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+    /**
+     * Waits briefly for the dialer's call notification to land: it usually
+     * posts just after the PHONE_STATE broadcast, and without it the banner
+     * would read "Unknown caller".
+     */
+    private fun awaitCallerLabel(): String? {
+        repeat(10) {
+            callerLabel?.let { return it }
+            Thread.sleep(50)
         }
-    }.getOrNull()
+        return null
+    }
 
     @Suppress("DEPRECATION")
     fun execute(action: CallAction) {
@@ -246,5 +199,21 @@ class CallMonitor(private val context: Context) {
 
     companion object {
         private const val TAG = "CallMonitor"
+
+        /**
+         * Caller name/number as shown by the dialer's incoming-call
+         * notification. Captured by [NotificationRelayService] so caller ID
+         * needs neither contacts nor call-log access.
+         */
+        @Volatile
+        private var callerLabel: String? = null
+
+        fun onCallNotification(label: String?) {
+            if (!label.isNullOrBlank()) callerLabel = label
+        }
+
+        fun clearCallNotification() {
+            callerLabel = null
+        }
     }
 }

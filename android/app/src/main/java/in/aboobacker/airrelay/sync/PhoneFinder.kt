@@ -105,19 +105,12 @@ class PhoneFinder(private val context: Context) {
             stopIntent,
             PendingIntent.FLAG_IMMUTABLE,
         )
-        val fullScreenIntent = Intent(context, FindPhoneActivity::class.java)
-        val fullScreenPending = PendingIntent.getActivity(
-            context,
-            4,
-            fullScreenIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
         val notification = Notification.Builder(context, CHANNEL_ID)
             .setContentTitle("Ringing so you can find this phone")
             .setContentText("Tap to stop")
             .setSmallIcon(`in`.aboobacker.airrelay.R.drawable.ic_launcher_foreground)
             .setContentIntent(stopPending)
-            .setFullScreenIntent(fullScreenPending, true)
+            .setCategory(Notification.CATEGORY_ALARM)
             .setOngoing(true)
             .setAutoCancel(true)
             .build()

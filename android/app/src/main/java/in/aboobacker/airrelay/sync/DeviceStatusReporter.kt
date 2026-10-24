@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.telephony.TelephonyManager
 import `in`.aboobacker.airrelay.protocol.DeviceStatus
@@ -18,7 +17,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 
-/** Periodically reports battery and Wi-Fi state to the Mac while connected. */
+/** Periodically reports battery and network state to the Mac while connected. */
 class DeviceStatusReporter(private val context: Context) {
 
     private var job: Job? = null
@@ -48,20 +47,10 @@ class DeviceStatusReporter(private val context: Context) {
         val plugged = battery.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
         if (level < 0) return
 
-        @Suppress("DEPRECATION", "InlinedApi")
-        val ssid = runCatching {
-            val wifi = context.applicationContext
-                .getSystemService(Context.WIFI_SERVICE) as WifiManager
-            wifi.connectionInfo?.ssid
-                ?.removeSurrounding("\"")
-                ?.takeUnless { it == WifiManager.UNKNOWN_SSID }
-        }.getOrNull()
-
         val networkType = activeNetworkType()
         val payload = DeviceStatus(
             battery = level * 100 / scale,
             charging = plugged != 0,
-            wifiSsid = ssid,
             networkType = networkType,
             signalLevel = if (networkType == "cellular") cellularSignalLevel() else null,
         )

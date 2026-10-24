@@ -51,6 +51,13 @@ class NotificationRelayService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (sbn.packageName == packageName) return
+        // Caller ID for the call banner rides on the dialer's own notification,
+        // so it is captured even when notification mirroring is off.
+        if (sbn.notification.category == Notification.CATEGORY_CALL) {
+            CallMonitor.onCallNotification(
+                sbn.notification.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
+            )
+        }
         if (!FeaturePrefs(this).notificationSync) return
         val extras = sbn.notification.extras
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
@@ -82,6 +89,9 @@ class NotificationRelayService : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        if (sbn.notification.category == Notification.CATEGORY_CALL) {
+            CallMonitor.clearCallNotification()
+        }
         if (!FeaturePrefs(this).notificationSync) return
         SyncService.instance?.send(
             FrameType.NOTIF_DISMISS,

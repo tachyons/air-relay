@@ -7,14 +7,22 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import `in`.aboobacker.airrelay.sync.Permissions
 import `in`.aboobacker.airrelay.sync.SyncService
 import `in`.aboobacker.airrelay.theme.AirRelayTheme
 
 class MainActivity : ComponentActivity() {
+
+  /** Ask for camera only when the Mac opens the preview, never at first launch. */
+  private val cameraPermission = registerForActivityResult(
+    ActivityResultContracts.RequestPermission(),
+  ) { granted -> if (granted) SyncService.instance?.startPendingCamera() }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
 
@@ -23,11 +31,22 @@ class MainActivity : ComponentActivity() {
       AirRelayTheme { Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { MainNavigation() } }
     }
     handleShareIntent(intent)
+    handleCameraRequest(intent)
   }
 
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     handleShareIntent(intent)
+    handleCameraRequest(intent)
+  }
+
+  private fun handleCameraRequest(intent: Intent?) {
+    if (intent?.getBooleanExtra(SyncService.EXTRA_ALLOW_CAMERA, false) != true) return
+    if (Permissions.hasCamera(this)) {
+      SyncService.instance?.startPendingCamera()
+    } else {
+      cameraPermission.launch(android.Manifest.permission.CAMERA)
+    }
   }
 
   private fun handleShareIntent(intent: Intent?) {

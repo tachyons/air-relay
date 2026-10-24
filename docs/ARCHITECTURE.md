@@ -35,7 +35,7 @@ Key decisions:
 
 | Module | Role |
 |---|---|
-| `SyncService` | Foreground service (`connectedDevice|dataSync|camera` types), owns socket + reconnect loop |
+| `SyncService` | Foreground service (`connectedDevice`, plus `camera` while the preview runs), owns socket + reconnect loop |
 | `DiscoveryManager` | `NsdManager` browse/resolve of `_syncbridge._tcp` |
 | `TlsClient` | mTLS 1.3 socket, cert pinning against paired fingerprint |
 | `NotificationRelayService` | `NotificationListenerService`; forwards posts/dismissals, executes `RemoteInput` replies |

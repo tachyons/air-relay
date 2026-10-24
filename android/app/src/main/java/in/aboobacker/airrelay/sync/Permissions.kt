@@ -16,17 +16,20 @@ object Permissions {
             Manifest.permission.POST_NOTIFICATIONS,
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.ANSWER_PHONE_CALLS,
-            Manifest.permission.READ_CALL_LOG,
-            Manifest.permission.READ_CONTACTS,
         )
     } else {
         arrayOf(
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.ANSWER_PHONE_CALLS,
-            Manifest.permission.READ_CALL_LOG,
-            Manifest.permission.READ_CONTACTS,
         )
     }
+
+    /** Camera is only ever requested on demand, when the Mac opens the preview. */
+    fun hasCamera(context: Context): Boolean =
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CAMERA,
+        ) == PackageManager.PERMISSION_GRANTED
 
     fun missingRuntime(context: Context): List<String> =
         runtime.filter {

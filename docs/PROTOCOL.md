@@ -131,10 +131,10 @@ anything else is ignored.
 { "callId": "uuid", "state": "ringing|active|ended", "displayName": "Alice", "number": "+1555…", "photoPng": "<base64, optional>" }
 ```
 
-`photoPng` is the caller's contact photo thumbnail as base64 PNG, present
-only when contacts permission is granted and the contact has a photo.
-Thumbnails are small (a few KB); the phone caches the encoded photo per
-number so state changes don't re-query or re-encode it.
+`displayName` is taken from the dialer's own incoming-call notification, so
+the phone reads neither contacts nor the call log. `number` and `photoPng`
+are not populated by the current Android build; both stay optional for
+compatibility and the macOS client falls back to "Unknown caller".
 
 ### CALL_ACTION
 ```json
